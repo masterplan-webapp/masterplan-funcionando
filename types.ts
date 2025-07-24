@@ -307,7 +307,7 @@ export interface RenamePlanModalProps {
 export interface AIPlanCreationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onGenerate: (prompt: string) => void;
+    onGenerate: (prompt: string) => Promise<void>;
     isLoading: boolean;
     initialPrompt?: string;
     title?: string;
