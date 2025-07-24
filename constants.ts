@@ -17,7 +17,7 @@ export const OPTIONS = {
     tipoCampanha: ["Awareness", "Alcance", "Tráfego", "Engajamento", "Geração de Leads", "Conversão", "Retargeting"],
     etapaFunil: ["Topo", "Meio", "Fundo"],
     canal: Object.keys(CHANNEL_FORMATS),
-    unidadeCompra: ["CPC", "CPM", "CPV", "CPL"],
+    unidadeCompra: ["CPC", "CPM", "CPV"],
 };
 
 export const DEFAULT_METRICS_BY_OBJECTIVE: Record<string, Partial<Campaign>> = {
