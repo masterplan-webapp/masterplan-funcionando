@@ -1,6 +1,7 @@
 
 
 
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
@@ -395,25 +396,18 @@ export const callGeminiAPI = async (prompt: string, isJson: boolean = false): Pr
 };
 
 export const generateAIPlan = async (userPrompt: string, language: LanguageCode): Promise<Partial<PlanData>> => {
-    const currentMonthIndex = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthNames = Array.from({length: 3}, (_, i) => {
-        const d = new Date(currentYear, currentMonthIndex + i, 1);
-        return `${d.getFullYear()}-${MONTHS_LIST[d.getMonth()]}`;
-    });
+    const langInstruction = language === 'pt-BR' ?
+        'Responda em Português do Brasil. O nome dos meses DEVE estar em português (Janeiro, Fevereiro, etc.).' :
+        'Respond in English. Month names MUST be in English (January, February, etc.).';
 
-    const langInstruction = language === 'pt-BR' ? 
-        'Responda em Português do Brasil. O nome dos meses deve ser em português (Janeiro, Fevereiro, etc.).' : 
-        'Respond in English. Month names must be in English (January, February, etc.).';
-    
-    const systemInstruction = `You are a senior media planner. Create an initial digital media plan based on the user's description. The plan must be realistic and strategic.
-    Create a plan for the next 3 months: ${monthNames.join(', ')}.
-    Distribute the investment and campaigns logically across these months.
-    The output MUST be a valid JSON object, with no additional text or explanations. Do not use markdown.
-    For the campaign's 'formato' field, suggest an appropriate format for the chosen 'canal'.
-    For 'logoUrl', use placehold.co API to generate a placeholder logo. Example: https://placehold.co/400x300/f472b6/ffffff?text=YourBrand
-    For 'aiImagePrompt', create a concise, descriptive text-to-image prompt for DALL-E or Midjourney that captures the brand's essence.
-    ${langInstruction}`;
+    const systemInstruction = `You are a senior media planner. Your task is to create a digital media plan from a user's description.
+- Analyze the user's prompt to determine the time period for the plan (e.g., "for the next quarter", "for July and August 2024", "for the last quarter of the year").
+- If no period is specified, create a plan for the next 3 months starting from the current date.
+- The output MUST be a valid JSON object, with no additional text or explanations. Do not use markdown.
+- For the campaign's 'formato' field, you MUST select an appropriate value from the predefined list for the chosen 'canal'. Do not invent new formats. The available formats are: ${JSON.stringify(CHANNEL_FORMATS)}.
+- For 'logoUrl', use the placehold.co API to generate a placeholder logo. Example: https://placehold.co/400x300/f472b6/ffffff?text=YourBrand
+- For 'aiImagePrompt', create a concise text-to-image prompt that captures the brand's essence.
+${langInstruction}`;
 
     const campaignSchema = {
         type: Type.OBJECT,
@@ -439,12 +433,21 @@ export const generateAIPlan = async (userPrompt: string, language: LanguageCode)
             logoUrl: { type: Type.STRING },
             aiImagePrompt: { type: Type.STRING },
             months: {
-                type: Type.OBJECT,
-                description: `Object containing campaigns for the next 3 months. Keys must be '${monthNames[0]}', '${monthNames[1]}', and '${monthNames[2]}'.`,
-                properties: {
-                    [monthNames[0]]: { type: Type.ARRAY, items: campaignSchema },
-                    [monthNames[1]]: { type: Type.ARRAY, items: campaignSchema },
-                    [monthNames[2]]: { type: Type.ARRAY, items: campaignSchema },
+                type: Type.ARRAY,
+                description: "An array of monthly plans. Each item must contain the month key and the campaigns for that month.",
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        month: {
+                            type: Type.STRING,
+                            description: "The month for this plan segment, in 'YYYY-MonthName' format (e.g., '2024-Janeiro'). Month name must be in the specified language."
+                        },
+                        campaigns: {
+                            type: Type.ARRAY,
+                            items: campaignSchema
+                        }
+                    },
+                    required: ["month", "campaigns"]
                 }
             }
         },
@@ -463,15 +466,29 @@ export const generateAIPlan = async (userPrompt: string, language: LanguageCode)
             },
         });
         const text = response.text.trim();
-        return JSON.parse(text);
+        const aiData = JSON.parse(text);
+
+        // Transform the months array into a Record<string, Campaign[]>
+        const transformedMonths = (aiData.months || []).reduce((acc: Record<string, Campaign[]>, item: { month: string; campaigns: Campaign[] }) => {
+            if (item.month && item.campaigns) {
+                 acc[item.month] = item.campaigns;
+            }
+            return acc;
+        }, {});
+        
+        // Return the plan data with the transformed months structure
+        const { months, ...restOfAiData } = aiData;
+        return { ...restOfAiData, months: transformedMonths };
+
     } catch (error) {
         console.error("Error generating AI plan:", error);
-        if (error instanceof Error && error.message.includes('responseSchema')) {
+        if (error instanceof Error && (error.message.includes('responseSchema') || error.message.includes('JSON'))) {
             throw new Error("The AI response did not match the required format. Please try again.");
         }
         throw new Error("Failed to parse AI response or call API.");
     }
 };
+
 
 export const generateAIKeywords = async (plan: PlanData, mode: 'seed' | 'prompt', input: string, language: LanguageCode): Promise<KeywordSuggestion[]> => {
     const langInstruction = language === 'pt-BR' ? 'Responda em Português do Brasil.' : 'Respond in English.';
