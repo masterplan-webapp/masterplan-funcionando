@@ -2310,8 +2310,8 @@ export const ShareablePlanViewer: React.FC<{ planId: string }> = ({ planId }) =>
                 if (fetchedPlan) {
                     setPlan(fetchedPlan);
                     if (fetchedPlan.user_id) {
-                         const { data: profile } = await supabase
-                            .from('profiles')
+                         const profilesTable: any = supabase.from('profiles');
+                         const { data: profile } = await profilesTable
                             .select('display_name, photo_url')
                             .eq('id', fetchedPlan.user_id)
                             .single();
