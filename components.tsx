@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
@@ -295,6 +296,10 @@ export const CampaignModal: React.FC<CampaignModalProps> = ({ isOpen, onClose, o
                              <div>
                                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">{t('Impressões')}</label>
                                 <input type="number" value={Math.round(campaign.impressoes || 0)} onChange={(e) => handleChange('impressoes', parseInt(e.target.value, 10))} className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 text-sm"/>
+                             </div>
+                             <div>
+                                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">{t('Alcance')}</label>
+                                <p className="mt-1 block w-full rounded-md py-2 px-3 bg-gray-200 dark:bg-gray-700/50 text-gray-900 dark:text-gray-200 text-sm font-semibold">{formatNumber(campaign.alcance)}</p>
                              </div>
                              <div>
                                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">{t('Cliques')}</label>
