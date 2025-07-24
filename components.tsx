@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
@@ -826,9 +824,9 @@ export const AIPlanCreationModal: React.FC<AIPlanCreationModalProps> = ({ isOpen
 
     if (!isOpen) return null;
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         if (prompt.trim()) {
-            onGenerate(prompt);
+            await onGenerate(prompt);
         }
     };
     
@@ -928,6 +926,100 @@ export const ShareLinkModal: React.FC<ShareLinkModalProps> = ({ isOpen, onClose,
         </div>
     )
 }
+
+interface ShareablePlanViewerProps {
+    planId: string;
+}
+
+export const ShareablePlanViewer: React.FC<ShareablePlanViewerProps> = ({ planId }) => {
+    const { t } = useLanguage();
+    const [plan, setPlan] = useState<PlanData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [ownerProfile, setOwnerProfile] = useState<{ display_name: string | null, photo_url: string | null } | null>(null);
+
+    useEffect(() => {
+        const fetchPlan = async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const fetchedPlan = await getPlanById(planId);
+                if (fetchedPlan) {
+                    setPlan(fetchedPlan);
+                    if (fetchedPlan.user_id) {
+                        const { data: profile, error: profileError } = await supabase
+                            .from('profiles')
+                            .select('display_name, photo_url')
+                            .eq('id', fetchedPlan.user_id)
+                            .single();
+                        
+                        if (profileError && profileError.code !== 'PGRST116') {
+                            console.warn("Could not fetch owner profile:", profileError);
+                        }
+                        setOwnerProfile(profile);
+                    }
+                } else {
+                    setError(t('plan_not_found'));
+                }
+            } catch (e: any) {
+                console.error("Failed to fetch plan:", e);
+                setError(t('plan_not_found'));
+            }
+            setIsLoading(false);
+        };
+        fetchPlan();
+    }, [planId, t]);
+
+    if (isLoading) {
+        return <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-900 text-white"><LoaderIcon className="animate-spin text-blue-500" size={48}/><p className="mt-4">{t('loading_plan')}</p></div>;
+    }
+
+    if (error || !plan) {
+        return <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900"><Card><h1 className="text-xl font-bold">{error || t('plan_not_found')}</h1></Card></div>;
+    }
+    
+    return (
+        <div className="bg-gray-100 dark:bg-gray-900/90 min-h-screen">
+            <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20">
+                <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center h-16">
+                         <div className="flex items-center gap-4">
+                            {plan.logoUrl && <img src={plan.logoUrl} alt="logo" className="h-10 w-10 object-contain rounded-md" onError={(e) => { const target = e.target as HTMLImageElement; target.onerror = null; target.src='https://placehold.co/100x100/e2e8f0/e2e8f0?text=Error'; }} />}
+                            <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">{plan.campaignName}</h1>
+                         </div>
+                         {ownerProfile && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                <span>{t('shared_by')}:</span>
+                                <img src={ownerProfile.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(ownerProfile.display_name || 'U')}&background=random&color=fff&size=32`} alt="owner" className="w-8 h-8 rounded-full" />
+                                <span className="font-semibold">{ownerProfile.display_name}</span>
+                            </div>
+                         )}
+                    </div>
+                </div>
+            </header>
+            <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+                <DashboardPage planData={plan} onNavigate={() => {}} onAddMonthClick={() => {}} onRegeneratePlan={async () => {}} isRegenerating={false} isReadOnly={true} />
+                {Object.keys(plan.months || {}).sort(sortMonthKeys).map(monthKey => (
+                    <MonthlyPlanPage 
+                        key={monthKey}
+                        month={monthKey}
+                        campaigns={plan.months[monthKey]}
+                        onSave={() => {}}
+                        onDelete={() => {}}
+                        planObjective={plan.objective}
+                        customFormats={plan.customFormats || []}
+                        onAddFormat={() => {}}
+                        totalInvestment={plan.totalInvestment}
+                        isReadOnly={true}
+                    />
+                ))}
+            </main>
+             <footer className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                &copy; {new Date().getFullYear()} MasterPlan. {t('Todos os direitos reservados.')}
+            </footer>
+        </div>
+    );
+};
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onProfileClick }) => {
     const { user } = useAuth();
@@ -1089,9 +1181,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ planData, onNaviga
         }
     };
 
-    const handleRegenerate = (prompt: string) => {
-        onRegeneratePlan(prompt);
-        setIsAIPlanAdjustModalOpen(false);
+    const handleRegenerate = async (prompt: string) => {
+        try {
+            await onRegeneratePlan(prompt);
+            setIsAIPlanAdjustModalOpen(false);
+        } catch(e) {
+            // Error is handled by the upstream function (alert).
+            // We catch here to prevent the modal from closing on failure.
+        }
     }
     
     return (
@@ -2255,25 +2352,23 @@ export const CreativeBuilderPage: React.FC<CreativeBuilderPageProps> = ({ planDa
             {images.length > 0 && (
                 <Card>
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">{t('Results')}</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {images.map((image, index) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {images.map((img, index) => (
                             <div key={index} className="group relative">
                                 <img
-                                    src={`data:image/png;base64,${image.base64}`}
-                                    alt={`Generated image ${index + 1} with aspect ratio ${image.aspectRatio}`}
-                                    className="rounded-lg object-cover w-full h-full"
+                                    src={`data:image/png;base64,${img.base64}`}
+                                    alt={`Generated image ${index + 1}`}
+                                    className="w-full h-auto rounded-lg shadow-md aspect-auto"
+                                    style={{ aspectRatio: img.aspectRatio.replace(':', '/') }}
                                 />
-                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex flex-col justify-between p-2">
-                                     <span className="bg-black/70 text-white text-xs font-bold px-2 py-1 rounded-full self-start">{image.aspectRatio}</span>
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 self-end">
-                                        <button 
-                                            onClick={() => downloadImage(image.base64, `${planData.campaignName}_${image.aspectRatio.replace(':','-')}.png`)}
-                                            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 shadow-lg"
-                                            title={t('download')}
-                                        >
-                                            <Download size={18} />
-                                        </button>
-                                    </div>
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between items-center p-4 rounded-lg">
+                                     <p className="text-white font-bold bg-black/50 px-2 py-1 rounded">{img.aspectRatio}</p>
+                                     <button
+                                        onClick={() => downloadImage(img.base64, `masterplan_creative_${img.aspectRatio.replace(':', 'x')}.png`)}
+                                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center gap-2"
+                                    >
+                                        <Download size={16}/> {t('download')}
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -2281,115 +2376,12 @@ export const CreativeBuilderPage: React.FC<CreativeBuilderPageProps> = ({ planDa
                 </Card>
             )}
 
-             {!isLoading && images.length === 0 && (
+             {images.length === 0 && !isLoading && (
                 <Card className="text-center py-16">
-                    <ImageIcon size={48} className="mx-auto text-gray-400 mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">{t('creative_builder_initial_prompt')}</p>
+                    <ImageIcon size={48} className="mx-auto text-gray-400" />
+                    <p className="mt-4 text-gray-500">{t('creative_builder_initial_prompt')}</p>
                 </Card>
-             )}
-        </div>
-    );
-};
-
-export const ShareablePlanViewer: React.FC<{ planId: string }> = ({ planId }) => {
-    const { t } = useLanguage();
-    const [plan, setPlan] = useState<PlanData | null>(null);
-    const [creator, setCreator] = useState<{ displayName: string | null; photoURL: string | null } | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [activeView, setActiveView] = useState('Overview');
-
-    useEffect(() => {
-        const fetchPlan = async () => {
-            if (!planId) {
-                setError(t('plan_not_found'));
-                setLoading(false);
-                return;
-            }
-            try {
-                const fetchedPlan = await getPlanById(planId);
-                if (fetchedPlan) {
-                    setPlan(fetchedPlan);
-                    if (fetchedPlan.user_id) {
-                         const profilesTable: any = supabase.from('profiles');
-                         const { data: profile } = await profilesTable
-                            .select('display_name, photo_url')
-                            .eq('id', fetchedPlan.user_id)
-                            .single();
-                        if (profile) {
-                            setCreator({ displayName: profile.display_name, photoURL: profile.photo_url });
-                        }
-                    }
-                } else {
-                    setError(t('plan_not_found'));
-                }
-            } catch (err) {
-                console.error(err);
-                setError(t('plan_not_found'));
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchPlan();
-    }, [planId, t]);
-    
-    if (loading) {
-        return <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-900 text-white"><LoaderIcon className="animate-spin text-blue-500" size={48}/><p className="mt-4">{t('loading_plan')}</p></div>;
-    }
-
-    if (error || !plan) {
-        return <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-900 text-white"><AlertTriangle className="text-red-500" size={48}/><p className="mt-4">{error}</p></div>;
-    }
-
-    const navButtonClass = (isActive: boolean) => 
-        `whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${isActive 
-            ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
-            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'}`;
-
-    return (
-        <div className="bg-gray-100 dark:bg-gray-900/90 min-h-screen">
-             <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-20">
-                <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center gap-3">
-                            <img src={ICON_LOGO} alt="MasterPlan Logo" className="h-10 w-10" />
-                            <h1 className="text-xl font-semibold text-gray-800 dark:text-gray-200">{plan.campaignName}</h1>
-                        </div>
-                        {creator && (
-                            <div className="flex items-center gap-3">
-                                <span className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">{t('shared_by')}</span>
-                                 <img src={creator.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(creator.displayName || 'U')}`} alt="Creator" className="w-8 h-8 rounded-full" />
-                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{creator.displayName}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </header>
-             <main className="p-4 sm:p-6 lg:p-8">
-                <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
-                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                        <button onClick={() => setActiveView('Overview')} className={navButtonClass(activeView === 'Overview')}>
-                            {t('overview')}
-                        </button>
-                        {Object.keys(plan.months || {}).sort(sortMonthKeys).map(monthKey => {
-                             const [year, monthName] = monthKey.split('-');
-                             const monthDisplay = `${t(monthName)} ${year}`;
-                             return (
-                                <button key={monthKey} onClick={() => setActiveView(monthKey)} className={navButtonClass(activeView === monthKey)}>
-                                    {monthDisplay}
-                                </button>
-                             )
-                        })}
-                    </nav>
-                </div>
-
-                {activeView === 'Overview' ? (
-                    <DashboardPage planData={plan} onNavigate={() => {}} onAddMonthClick={() => {}} onRegeneratePlan={async () => {}} isRegenerating={false} isReadOnly={true} />
-                ) : (
-                    plan.months[activeView] && <MonthlyPlanPage month={activeView} campaigns={plan.months[activeView]} onSave={()=>{}} onDelete={()=>{}} planObjective={plan.objective} customFormats={plan.customFormats || []} onAddFormat={()=>{}} totalInvestment={plan.totalInvestment} isReadOnly={true} />
-                )}
-
-            </main>
+            )}
         </div>
     );
 };
