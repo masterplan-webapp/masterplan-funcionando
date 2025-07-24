@@ -2,6 +2,8 @@
 
 
 
+
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
@@ -404,6 +406,10 @@ export const generateAIPlan = async (userPrompt: string, language: LanguageCode)
 - Analyze the user's prompt to determine the time period for the plan (e.g., "for the next quarter", "for July and August 2024", "for the last quarter of the year").
 - If no period is specified, create a plan for the next 3 months starting from the current date.
 - The output MUST be a valid JSON object, with no additional text or explanations. Do not use markdown.
+- For each campaign, you must provide:
+  - 'publicoAlvo': A specific target audience, refining the main 'targetAudience' for that campaign's specific goal.
+  - 'kpi': The main Key Performance Indicators (e.g., "Cliques, CPC", "Impressões, Alcance").
+  - 'unidadeCompra': Select 'CPC' for performance-oriented campaigns (like Tráfego, Conversão) and 'CPM' for reach/awareness campaigns (like Awareness, Alcance).
 - For the campaign's 'formato' field, you MUST select an appropriate value from the predefined list for the chosen 'canal'. Do not invent new formats. The available formats are: ${JSON.stringify(CHANNEL_FORMATS)}.
 - For 'logoUrl', use the placehold.co API to generate a placeholder logo. Example: https://placehold.co/400x300/f472b6/ffffff?text=YourBrand
 - For 'aiImagePrompt', create a concise text-to-image prompt that captures the brand's essence.
@@ -417,9 +423,12 @@ ${langInstruction}`;
             canal: { type: Type.STRING, enum: OPTIONS.canal },
             formato: { type: Type.STRING },
             objetivo: { type: Type.STRING },
-            budget: { type: Type.NUMBER }
+            publicoAlvo: { type: Type.STRING, description: "A specific target audience for this campaign, derived from the main plan audience." },
+            kpi: { type: Type.STRING, description: "Key Performance Indicators for the campaign, e.g., 'Cliques, CPC'." },
+            budget: { type: Type.NUMBER },
+            unidadeCompra: { type: Type.STRING, enum: ["CPC", "CPM", "CPV"], description: "The buying unit. Use 'CPC' for performance goals (Traffic, Conversion) and 'CPM' for awareness goals." }
         },
-        required: ["tipoCampanha", "etapaFunil", "canal", "formato", "objetivo", "budget"]
+        required: ["tipoCampanha", "etapaFunil", "canal", "formato", "objetivo", "publicoAlvo", "kpi", "budget", "unidadeCompra"]
     };
 
     const schema = {
