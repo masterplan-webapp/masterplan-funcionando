@@ -543,11 +543,10 @@ function AppLogic() {
                 setAllPlans(prev => [newPlanData, ...prev]);
                 selectActivePlan(newPlanData);
             }
-            setIsAIPlanModalOpen(false);
-
         } catch (error) {
             console.error("Error creating AI plan:", error);
             alert(t('Erro ao criar o plano com IA. Por favor, tente novamente.'));
+            throw error;
         } finally {
             setIsGeneratingPlan(false);
         }
@@ -580,6 +579,7 @@ function AppLogic() {
         } catch (error) {
             console.error("Error regenerating AI plan:", error);
             alert(t('Erro ao criar o plano com IA. Por favor, tente novamente.'));
+            throw error;
         } finally {
             setIsRegeneratingPlan(false);
         }
@@ -791,7 +791,14 @@ function AppLogic() {
             <AIPlanCreationModal
                 isOpen={isAIPlanModalOpen}
                 onClose={() => setIsAIPlanModalOpen(false)}
-                onGenerate={handleGenerateAIPlan}
+                onGenerate={async (prompt) => {
+                    try {
+                        await handleGenerateAIPlan(prompt);
+                        setIsAIPlanModalOpen(false);
+                    } catch (e) {
+                        // Error is already alerted by the handler
+                    }
+                }}
                 isLoading={isGeneratingPlan}
             />
             <ShareLinkModal
