@@ -1,4 +1,6 @@
 
+
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
@@ -90,8 +92,10 @@ const planFromDb = (dbPlan: any): PlanData => {
 
 // --- Supabase Data Services ---
 export const getPlans = async (userId: string): Promise<PlanData[]> => {
-    const { data, error } = await supabase
-        .from('plans')
+    // To prevent a "Type instantiation is excessively deep" error, we cast the
+    // query builder to `any` to disable deep type inspection for this complex query.
+    const plansTable: any = supabase.from('plans');
+    const { data, error } = await plansTable
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
@@ -104,14 +108,12 @@ export const getPlans = async (userId: string): Promise<PlanData[]> => {
 };
 
 export const savePlan = async (plan: PlanData): Promise<PlanData | null> => {
-    // To prevent a "Type instantiation is excessively deep" error from TypeScript
-    // when dealing with complex nested JSON types, we first create the query builder
-    // and then cast it to `any` before executing the final part of the query.
-    const query = supabase
-        .from('plans')
-        .upsert(plan as any);
+    // To prevent a "Type instantiation is excessively deep" error, we cast the
+    // query builder to `any` to disable deep type inspection for this complex query.
+    const plansTable: any = supabase.from('plans');
     
-    const { data, error } = await (query as any)
+    const { data, error } = await plansTable
+        .upsert(plan)
         .select()
         .single();
     
@@ -123,8 +125,10 @@ export const savePlan = async (plan: PlanData): Promise<PlanData | null> => {
 };
 
 export const deletePlan = async (planId: string): Promise<void> => {
-    const { error } = await supabase
-        .from('plans')
+    // To prevent a "Type instantiation is excessively deep" error, we cast the
+    // query builder to `any` to disable deep type inspection for this complex query.
+    const plansTable: any = supabase.from('plans');
+    const { error } = await plansTable
         .delete()
         .eq('id', planId);
 
@@ -134,14 +138,14 @@ export const deletePlan = async (planId: string): Promise<void> => {
 };
 
 export const getPlanById = async (planId: string): Promise<PlanData | null> => {
-    // To work around a "Type instantiation is excessively deep" TypeScript error
-    // with complex JSON columns, we cast the query builder to 'any' before calling .single().
-    const query = supabase
-        .from('plans')
-        .select('*')
-        .eq('id', planId);
+    // To prevent a "Type instantiation is excessively deep" error, we cast the
+    // query builder to `any` to disable deep type inspection for this complex query.
+    const plansTable: any = supabase.from('plans');
 
-    const { data, error } = await (query as any).single();
+    const { data, error } = await plansTable
+        .select('*')
+        .eq('id', planId)
+        .single();
 
     if (error) {
         if (error.code !== 'PGRST116') {
@@ -206,6 +210,22 @@ export const recalculateCampaignMetrics = (campaign: Partial<Campaign>): Campaig
     const cpa = conversoes > 0 ? budget / conversoes : 0;
     const visitas = cliques * connectRate;
     const orcamentoDiario = budget / 30.4;
+    
+    // Estimate reach based on impressions and a typical frequency for the campaign type.
+    const getFrequency = (campaignType?: string): number => {
+        switch(campaignType) {
+            case "Awareness": return 4.0;
+            case "Alcance": return 3.5;
+            case "Tráfego": return 1.8;
+            case "Engajamento": return 2.5;
+            case "Geração de Leads": return 2.2;
+            case "Conversão": return 2.0;
+            case "Retargeting": return 5.0; // Higher frequency for retargeting
+            default: return 3.0; // A general average
+        }
+    };
+    const frequency = getFrequency(newCampaign.tipoCampanha);
+    const alcance = impressoes > 0 && frequency > 0 ? impressoes / frequency : 0;
 
     return {
         ...newCampaign,
@@ -218,6 +238,7 @@ export const recalculateCampaignMetrics = (campaign: Partial<Campaign>): Campaig
         impressoes: Math.round(impressoes),
         cliques: Math.round(cliques),
         conversoes: Math.round(conversoes),
+        alcance: Math.round(alcance),
         cpa,
         visitas: Math.round(visitas),
         orcamentoDiario,
