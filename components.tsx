@@ -973,7 +973,7 @@ export const ShareablePlanViewer: React.FC<ShareablePlanViewerProps> = ({ planId
 
     useEffect(() => {
         if (plan) {
-            document.title = `MasterPlan AI - "${plan.campaignName}"`;
+            document.title = `MasterPlan AI - ${plan.campaignName}`;
         }
         return () => {
             document.title = 'MasterPlan AI';
