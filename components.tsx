@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
@@ -1182,17 +1183,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ planData, onNaviga
     };
 
     const handleRegenerate = async (prompt: string) => {
+        setIsAIPlanAdjustModalOpen(false); // Close modal immediately
         try {
             await onRegeneratePlan(prompt);
-            setIsAIPlanAdjustModalOpen(false);
         } catch(e) {
-            // Error is handled by the upstream function (alert).
-            // We catch here to prevent the modal from closing on failure.
+            // Error is handled by the upstream function, which also sets isRegenerating to false.
         }
     }
     
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
+            {isRegenerating && (
+                <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 z-20 flex flex-col items-center justify-start pt-48 rounded-lg backdrop-blur-sm">
+                    <LoaderIcon size={48} className="animate-spin text-blue-500" />
+                    <p className="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-200">{t('Ajustando plano...')}</p>
+                </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-3">
                     <Card className="h-full">
