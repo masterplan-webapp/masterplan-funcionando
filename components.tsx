@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
@@ -969,6 +970,15 @@ export const ShareablePlanViewer: React.FC<ShareablePlanViewerProps> = ({ planId
         };
         fetchPlan();
     }, [planId, t]);
+
+    useEffect(() => {
+        if (plan) {
+            document.title = `MasterPlan AI - "${plan.campaignName}"`;
+        }
+        return () => {
+            document.title = 'MasterPlan AI';
+        }
+    }, [plan]);
 
     if (isLoading) {
         return <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-900 text-white"><LoaderIcon className="animate-spin text-blue-500" size={48}/><p className="mt-4">{t('loading_plan')}</p></div>;
