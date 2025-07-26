@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
 import { marked } from 'marked';
 import { useLanguage, useTheme, useAuth } from './contexts';
-import { callGeminiAPI, formatCurrency, formatPercentage, formatNumber, recalculateCampaignMetrics, calculateKPIs, getPlanById, supabase, savePlan, sortMonthKeys, generateAIKeywords, generateAIImages, exportCreativesAsCSV, exportCreativesAsTXT, exportUTMLinksAsCSV, exportUTMLinksAsTXT, exportGroupedKeywordsAsCSV, exportGroupedKeywordsAsTXT, calculatePlanSummary } from './services';
+import { callGeminiAPI, formatCurrency, formatPercentage, formatNumber, recalculateCampaignMetrics, calculateKPIs, supabase, savePlan, sortMonthKeys, generateAIKeywords, generateAIImages, exportCreativesAsCSV, exportCreativesAsTXT, exportUTMLinksAsCSV, exportUTMLinksAsTXT, exportGroupedKeywordsAsCSV, exportGroupedKeywordsAsTXT, calculatePlanSummary, getPublicPlanById, getPublicProfileByUserId } from './services';
 import { TRANSLATIONS, OPTIONS, COLORS, MONTHS_LIST, CHANNEL_FORMATS, DEFAULT_METRICS_BY_OBJECTIVE } from './constants';
 import {
     PlanData, Campaign, CreativeTextData, UTMLink, MonthlySummary, SummaryData, KeywordSuggestion, AdGroup,
@@ -943,29 +944,24 @@ export const ShareablePlanViewer: React.FC<ShareablePlanViewerProps> = ({ planId
             setIsLoading(true);
             setError(null);
             try {
-                const fetchedPlan = await getPlanById(planId);
+                // Use the new RPC-based functions for secure public access
+                const fetchedPlan = await getPublicPlanById(planId);
+                
                 if (fetchedPlan) {
                     setPlan(fetchedPlan);
                     if (fetchedPlan.user_id) {
-                        const { data: profile, error: profileError } = await supabase
-                            .from('profiles')
-                            .select('display_name, photo_url')
-                            .eq('id', fetchedPlan.user_id)
-                            .single();
-                        
-                        if (profileError && profileError.code !== 'PGRST116') {
-                            console.warn("Could not fetch owner profile:", profileError);
-                        }
+                        const profile = await getPublicProfileByUserId(fetchedPlan.user_id);
                         setOwnerProfile(profile);
                     }
                 } else {
                     setError(t('plan_not_found'));
                 }
             } catch (e: any) {
-                console.error("Failed to fetch plan:", e);
+                console.error("Failed to fetch shared plan:", e);
                 setError(t('plan_not_found'));
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
         };
         fetchPlan();
     }, [planId, t]);
