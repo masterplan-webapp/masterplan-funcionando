@@ -30,6 +30,7 @@ export interface Database {
             adGroups: Json;
             aiPrompt?: string | null;
             aiImagePrompt?: string | null;
+            is_public?: boolean;
         },
         Insert: {
             id: string;
@@ -48,6 +49,7 @@ export interface Database {
             adGroups: Json;
             aiPrompt?: string | null;
             aiImagePrompt?: string | null;
+            is_public?: boolean;
         },
         Update: {
             id?: string;
@@ -66,6 +68,7 @@ export interface Database {
             adGroups?: Json;
             aiPrompt?: string | null;
             aiImagePrompt?: string | null;
+            is_public?: boolean;
         }
       },
       profiles: {
@@ -178,6 +181,7 @@ export interface PlanData {
     adGroups: AdGroup[];
     aiPrompt?: string | null;
     aiImagePrompt?: string | null;
+    is_public?: boolean;
 }
 
 export interface UTMLink {
