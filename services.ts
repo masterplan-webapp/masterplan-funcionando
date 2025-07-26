@@ -159,6 +159,40 @@ export const getPlanById = async (planId: string): Promise<PlanData | null> => {
     return data ? planFromDb(data as any) : null;
 };
 
+export const getPublicPlanById = async (planId: string): Promise<PlanData | null> => {
+    // This RPC call requires a `get_public_plan` SECURITY DEFINER function in Supabase.
+    // The function should take a `plan_id TEXT` argument and select from `plans`
+    // where `id = plan_id` AND `is_public = true`.
+    const { data, error } = await supabase
+        .rpc('get_public_plan', { plan_id: planId })
+        .single();
+
+    if (error) {
+        if (error.code !== 'PGRST116') { // PGRST116: No rows found
+             console.error("Error fetching public plan via RPC:", error);
+        }
+        return null;
+    }
+    return data ? planFromDb(data as any) : null;
+};
+
+export const getPublicProfileByUserId = async (userId: string): Promise<{ display_name: string | null, photo_url: string | null } | null> => {
+    // This RPC call requires a `get_public_profile` SECURITY DEFINER function in Supabase.
+    // The function should take a `user_id_in UUID` argument and select from `profiles`
+    // where `id = user_id_in`.
+    const { data, error } = await supabase
+        .rpc('get_public_profile', { user_id_in: userId })
+        .single();
+
+    if (error) {
+         if (error.code !== 'PGRST116') { // PGRST116: No rows found
+            console.error("Error fetching public profile via RPC:", error);
+        }
+        return null;
+    }
+    return data;
+};
+
 
 // --- Core Business Logic ---
 export const recalculateCampaignMetrics = (campaign: Partial<Campaign>): Campaign => {
