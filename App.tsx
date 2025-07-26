@@ -641,8 +641,15 @@ function AppLogic() {
         }
     }, [activePlan, t]);
 
-    const handleGetShareLink = useCallback(() => {
+    const handleGetShareLink = useCallback(async () => {
         if (!activePlan) return;
+
+        // Set the plan to public before generating the link
+        if (!activePlan.is_public) {
+            const updatedPlan = { ...activePlan, is_public: true };
+            await handlePlanUpdate(updatedPlan);
+        }
+
         // This relies on browser environment.
         try {
             const link = window.location.origin + `?view=share&planId=${activePlan.id}`;
@@ -653,7 +660,7 @@ function AppLogic() {
             console.error(e);
         }
         setShareModalOpen(true);
-    }, [activePlan, t]);
+    }, [activePlan, t, handlePlanUpdate]);
 
 
     if (loading) {
