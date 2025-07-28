@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy as CopyIcon, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, LucideProps, AlertTriangle, KeyRound, ImageIcon, Download } from 'lucide-react';
@@ -947,8 +948,10 @@ export const ShareablePlanViewer: React.FC<ShareablePlanViewerProps> = ({ planId
                 if (fetchedPlan) {
                     setPlan(fetchedPlan);
                     if (fetchedPlan.user_id) {
-                        const { data: profile, error: profileError } = await supabase
-                            .from('profiles')
+                        // To prevent a "Type instantiation is excessively deep" error, we cast the
+                        // query builder to `any` to disable deep type inspection for this complex query.
+                        const profilesTable: any = supabase.from('profiles');
+                        const { data: profile, error: profileError } = await profilesTable
                             .select('display_name, photo_url')
                             .eq('id', fetchedPlan.user_id)
                             .single();
@@ -2147,19 +2150,13 @@ export const KeywordBuilderPage: React.FC<KeywordBuilderPageProps> = ({ planData
     const [keywordsToAssign, setKeywordsToAssign] = useState<KeywordSuggestion[]>([]);
     const [assignTargetGroup, setAssignTargetGroup] = useState<string>('');
 
-    const ensureUnassignedGroup = (plan: PlanData): PlanData => {
-        const adGroups = plan.adGroups || [];
-        if (!adGroups.find(g => g.id === 'unassigned')) {
-            return {
-                ...plan,
-                adGroups: [{ id: 'unassigned', name: t('unassigned_keywords'), keywords: [] }, ...adGroups]
-            };
+    const adGroups = useMemo(() => {
+        const currentAdGroups = planData.adGroups || [];
+        if (!currentAdGroups.find(g => g.id === 'unassigned')) {
+            return [{ id: 'unassigned', name: t('unassigned_keywords'), keywords: [] }, ...currentAdGroups];
         }
-        return plan;
-    };
-    
-    const localPlan = useMemo(() => ensureUnassignedGroup(planData), [planData, t]);
-    const { adGroups = [] } = localPlan;
+        return currentAdGroups;
+    }, [planData.adGroups, t]);
 
     const unassignedKeywords = useMemo(() => {
         return adGroups.find(g => g.id === 'unassigned')?.keywords || [];
@@ -2183,7 +2180,9 @@ export const KeywordBuilderPage: React.FC<KeywordBuilderPageProps> = ({ planData
                 }
                 return group;
             });
-            await onPlanUpdate({ ...localPlan, adGroups: updatedAdGroups });
+            const updatedPlan = { ...planData };
+            updatedPlan.adGroups = updatedAdGroups;
+            await onPlanUpdate(updatedPlan);
             setInputValue('');
 
         } catch (e) {
@@ -2202,7 +2201,9 @@ export const KeywordBuilderPage: React.FC<KeywordBuilderPageProps> = ({ planData
             keywords: [],
         };
         const updatedAdGroups = [...adGroups, newGroup];
-        await onPlanUpdate({ ...localPlan, adGroups: updatedAdGroups });
+        const updatedPlan = { ...planData };
+        updatedPlan.adGroups = updatedAdGroups;
+        await onPlanUpdate(updatedPlan);
         setNewGroupName('');
     };
     
@@ -2221,7 +2222,9 @@ export const KeywordBuilderPage: React.FC<KeywordBuilderPageProps> = ({ planData
             return g;
         });
         
-        await onPlanUpdate({ ...localPlan, adGroups: updatedAdGroups });
+        const updatedPlan = { ...planData };
+        updatedPlan.adGroups = updatedAdGroups;
+        await onPlanUpdate(updatedPlan);
     };
 
     return (
