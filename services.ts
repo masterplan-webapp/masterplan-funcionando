@@ -1,15 +1,12 @@
 
 
-
-
-
-
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import autoTable from 'jspdf-autotable';
+import { Chart } from 'chart.js/auto';
 import { Database, PlanData, Campaign, User, LanguageCode, KeywordSuggestion, CreativeTextData, AdGroup, UTMLink, GeneratedImage, AspectRatio, SummaryData, MonthlySummary } from './types';
-import { MONTHS_LIST, OPTIONS, CHANNEL_FORMATS, DEFAULT_METRICS_BY_OBJECTIVE } from "./constants";
+import { MONTHS_LIST, OPTIONS, CHANNEL_FORMATS, DEFAULT_METRICS_BY_OBJECTIVE, COLORS, TRANSLATIONS } from "./constants";
 
 
 // --- Supabase Client ---
@@ -157,40 +154,6 @@ export const getPlanById = async (planId: string): Promise<PlanData | null> => {
         return null;
     }
     return data ? planFromDb(data as any) : null;
-};
-
-export const getPublicPlanById = async (planId: string): Promise<PlanData | null> => {
-    // This RPC call requires a `get_public_plan` SECURITY DEFINER function in Supabase.
-    // The function should take a `plan_id TEXT` argument and select from `plans`
-    // where `id = plan_id` AND `is_public = true`.
-    const { data, error } = await supabase
-        .rpc('get_public_plan', { plan_id: planId })
-        .single();
-
-    if (error) {
-        if (error.code !== 'PGRST116') { // PGRST116: No rows found
-             console.error("Error fetching public plan via RPC:", error);
-        }
-        return null;
-    }
-    return data ? planFromDb(data as any) : null;
-};
-
-export const getPublicProfileByUserId = async (userId: string): Promise<{ display_name: string | null, photo_url: string | null } | null> => {
-    // This RPC call requires a `get_public_profile` SECURITY DEFINER function in Supabase.
-    // The function should take a `user_id_in UUID` argument and select from `profiles`
-    // where `id = user_id_in`.
-    const { data, error } = await supabase
-        .rpc('get_public_profile', { user_id_in: userId })
-        .single();
-
-    if (error) {
-         if (error.code !== 'PGRST116') { // PGRST116: No rows found
-            console.error("Error fetching public profile via RPC:", error);
-        }
-        return null;
-    }
-    return data;
 };
 
 
@@ -569,35 +532,442 @@ export const generateAIImages = async (prompt: string): Promise<GeneratedImage[]
 
 // --- Export Services ---
 
+const imageToBase64 = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                const dataURL = canvas.toDataURL('image/png');
+                resolve(dataURL);
+            } else {
+                reject(new Error('Could not get canvas context.'));
+            }
+        };
+        img.onerror = (error) => reject(error);
+        img.src = url;
+    });
+};
+
+const generateChartImage = async (config: any, width: number, height: number): Promise<string> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    // This container is necessary for chart.js to calculate sizes correctly
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px'; // Position off-screen
+    container.style.width = `${width}px`;
+    container.style.height = `${height}px`;
+    container.appendChild(canvas);
+    document.body.appendChild(container);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        document.body.removeChild(container);
+        throw new Error('Could not get canvas context');
+    }
+
+    const chart = new Chart(ctx, config);
+
+    // Wait for the animation to complete before getting the base64 image
+    return new Promise((resolve) => {
+        if (config.options.animation) {
+             config.options.animation.onComplete = () => {
+                const dataUrl = chart.toBase64Image();
+                chart.destroy();
+                document.body.removeChild(container);
+                resolve(dataUrl);
+            };
+        } else {
+            // If no animation, resolve immediately
+            const dataUrl = chart.toBase64Image();
+            chart.destroy();
+            document.body.removeChild(container);
+            resolve(dataUrl);
+        }
+    });
+};
+
+
 export const exportPlanAsPDF = async (plan: PlanData, t: (key: string, subs?: any) => string) => {
-    const mainContent = document.querySelector('main');
-    if (!mainContent) {
-        console.error("Main content area not found for PDF export.");
-        return;
-    }
-    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
-    const canvas = await html2canvas(mainContent, { scale: 2, useCORS: true, backgroundColor: window.getComputedStyle(document.body).backgroundColor });
-    const imgData = canvas.toDataURL('image/png');
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-    const ratio = canvasWidth / canvasHeight;
-    const imgWidth = pdfWidth;
-    const imgHeight = imgWidth / ratio;
-    let heightLeft = imgHeight;
-    let position = 0;
+    const doc = new jsPDF({ orientation: 'l', unit: 'pt', format: 'a4' });
+    const { summary, monthlySummary } = calculatePlanSummary(plan);
+    const allCampaigns = Object.values(plan.months || {}).flat();
 
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    heightLeft -= pdfHeight;
+    const PRIMARY_COLOR = '#0ea5e9'; // sky-500
+    const TEXT_COLOR = '#334155'; // slate-700
+    const LIGHT_TEXT_COLOR = '#64748b'; // slate-500
+    const LINE_COLOR = '#e2e8f0'; // slate-200
+    const PAGE_MARGIN = 40;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
-    while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+    const processChartData = (campaigns: Campaign[], key: keyof Campaign) => {
+        return campaigns.reduce((acc, campaign) => {
+            const group = (campaign[key] as string) || 'N/A';
+            const budget = Number(campaign.budget) || 0;
+            const existing = acc.find(item => item.name === group);
+            if (existing) { existing.value += budget; }
+            else { acc.push({ name: group, value: budget }); }
+            return acc;
+        }, [] as { name: string, value: number }[]).sort((a,b) => b.value - a.value);
+    };
+
+    const percentageLabelsPlugin = {
+        id: 'percentageLabels',
+        afterDraw: (chart: any) => {
+            const { ctx, data } = chart;
+            if (!data || !data.datasets || data.datasets.length === 0) return;
+
+            ctx.save();
+            
+            data.datasets.forEach((dataset: any, i: number) => {
+                const meta = chart.getDatasetMeta(i);
+                if (!meta.hidden && meta.data) {
+                    const total = dataset.data.reduce((a: number, b: number) => a + b, 0);
+                    if (total <= 0) return;
+
+                    meta.data.forEach((element: any, index: number) => {
+                        const { x, y } = element.getCenterPoint();
+                        const value = dataset.data[index];
+                        const percentage = value / total;
+
+                        if (percentage > 0.03) { // Only show for slices > 3%
+                            const text = (percentage * 100).toFixed(0) + '%';
+                            
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.font = 'bold 10px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+
+                            // Text shadow for readability
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                            ctx.shadowBlur = 3;
+                            ctx.shadowOffsetX = 1;
+                            ctx.shadowOffsetY = 1;
+                            
+                            ctx.fillText(text, x, y);
+                            
+                            // Reset shadow for next element
+                            ctx.shadowColor = 'transparent';
+                            ctx.shadowBlur = 0;
+                            ctx.shadowOffsetX = 0;
+                            ctx.shadowOffsetY = 0;
+                        }
+                    });
+                }
+            });
+            ctx.restore();
+        }
+    };
+
+    const createChartConfig = (data: {name: string, value: number}[]) => ({
+        type: 'pie' as const,
+        plugins: [percentageLabelsPlugin],
+        data: {
+            labels: data.map(d => d.name),
+            datasets: [{
+                data: data.map(d => d.value),
+                backgroundColor: COLORS,
+                borderColor: '#ffffff',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right' as const,
+                    align: 'center' as const,
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: { size: 10 }
+                    }
+                },
+                title: {
+                    display: false, // Title is rendered on the PDF directly
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context: any) => {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed !== null) {
+                                label += formatCurrency(context.parsed);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            animation: {
+                onComplete: () => {} // For promise resolution
+            }
+        }
+    });
+
+    const addHeader = (docInstance: jsPDF) => {
+        const pageNumber = docInstance.getNumberOfPages();
+        if (pageNumber === 1) return; // No header on cover page
+
+        docInstance.setFontSize(9);
+        docInstance.setTextColor(LIGHT_TEXT_COLOR);
+        docInstance.setFont('helvetica', 'normal');
+        docInstance.text(plan.campaignName, PAGE_MARGIN, PAGE_MARGIN / 1.5);
+        docInstance.text('MasterPlan AI', pageWidth - PAGE_MARGIN, PAGE_MARGIN / 1.5, { align: 'right' });
+        docInstance.setDrawColor(LINE_COLOR);
+        docInstance.line(PAGE_MARGIN, PAGE_MARGIN / 1.5 + 5, pageWidth - PAGE_MARGIN, PAGE_MARGIN / 1.5 + 5);
+    };
+
+    const addFooter = (docInstance: jsPDF) => {
+        const pageNumber = docInstance.getNumberOfPages();
+        docInstance.setFontSize(9);
+        docInstance.setTextColor(LIGHT_TEXT_COLOR);
+        docInstance.setDrawColor(LINE_COLOR);
+        docInstance.line(PAGE_MARGIN, pageHeight - PAGE_MARGIN, pageWidth - PAGE_MARGIN, pageHeight - PAGE_MARGIN);
+        docInstance.text(`Página ${pageNumber}`, pageWidth - PAGE_MARGIN, pageHeight - PAGE_MARGIN + 20, { align: 'right' });
+    };
+
+    // --- Cover Page ---
+    try {
+        if (plan.logoUrl) {
+            try {
+                const logoBase64 = await imageToBase64(plan.logoUrl);
+                doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, PAGE_MARGIN, 80, 80, undefined, 'FAST');
+            } catch (e) {
+                console.error("Could not load logo for PDF:", e);
+            }
+        }
+        doc.setFontSize(32);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(plan.campaignName, pageWidth / 2, pageHeight / 2 - 60, { align: 'center' });
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(LIGHT_TEXT_COLOR);
+        doc.text(t('media_plan'), pageWidth / 2, pageHeight / 2 - 30, { align: 'center' });
+        autoTable(doc, {
+            body: [
+                [t('Objetivo'), plan.objective],
+                [t('Público-Alvo'), plan.targetAudience],
+                [t('Investimento Total'), formatCurrency(summary.budget)],
+                [t('Período'), `${Object.keys(plan.months || {}).length} ${t('Meses')}`],
+            ],
+            startY: pageHeight / 2,
+            theme: 'plain',
+            styles: { font: 'helvetica', fontSize: 12, cellPadding: 8, },
+            columnStyles: {
+                0: { fontStyle: 'bold', textColor: TEXT_COLOR, cellWidth: 150 },
+                1: { textColor: LIGHT_TEXT_COLOR }
+            }
+        });
+        doc.setFontSize(10);
+        doc.setTextColor(LIGHT_TEXT_COLOR);
+        doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, pageWidth / 2, pageHeight - PAGE_MARGIN, { align: 'center' });
+        addFooter(doc);
+    } catch (e) {
+        console.error("Error creating cover page:", e);
+        doc.text("Erro ao gerar a capa do PDF.", 20, 20);
     }
-    pdf.save(`${plan.campaignName.replace(/ /g, '_')}_export.pdf`);
+    
+    // --- Overview Page ---
+    if (allCampaigns.length > 0) {
+        doc.addPage();
+        addHeader(doc);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(t('overview'), PAGE_MARGIN, PAGE_MARGIN + 35);
+        
+        const kpis = [
+            { title: t('Investimento Total'), value: formatCurrency(summary.budget) },
+            { title: t('Impressões'), value: formatNumber(summary.impressoes) },
+            { title: t('Cliques'), value: formatNumber(summary.cliques) },
+            { title: t('Conversões'), value: formatNumber(summary.conversoes) },
+            { title: t('CTR (%)'), value: formatPercentage(summary.ctr) },
+            { title: t('CPA (R$)'), value: formatCurrency(summary.cpa) }
+        ];
+
+        const cardWidth = (pageWidth - PAGE_MARGIN * 2 - 20 * 2) / 3;
+        const cardHeight = 60;
+        kpis.forEach((kpi, index) => {
+            const x = PAGE_MARGIN + (index % 3) * (cardWidth + 20);
+            const y = PAGE_MARGIN + 60 + Math.floor(index / 3) * (cardHeight + 20);
+            doc.setFillColor(248, 250, 252); // slate-50
+            doc.roundedRect(x, y, cardWidth, cardHeight, 5, 5, 'F');
+            doc.setFontSize(10);
+            doc.setTextColor(LIGHT_TEXT_COLOR);
+            doc.text(kpi.title, x + 10, y + 20);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(TEXT_COLOR);
+            doc.text(String(kpi.value), x + 10, y + 42);
+        });
+
+        autoTable(doc, {
+            head: [[t('Mês'), t('Invest. Total'), t('% Share'), t('Impressões'), t('Cliques'), t('Conversões'), t('Tx. Conversão')]],
+            body: Object.entries(monthlySummary).sort(([a], [b]) => sortMonthKeys(a, b)).map(([month, data]) => {
+                 const share = plan.totalInvestment > 0 ? (data.budget / plan.totalInvestment) * 100 : 0;
+                 return [
+                    month.split('-').reverse().map(p => t(p)).join(' '),
+                    formatCurrency(data.budget),
+                    formatPercentage(share),
+                    formatNumber(data.impressoes),
+                    formatNumber(data.cliques),
+                    formatNumber(data.conversoes),
+                    formatPercentage(data.taxaConversao)
+                 ];
+            }),
+            foot: [[
+                t('Totais'),
+                formatCurrency(summary.budget),
+                formatPercentage(plan.totalInvestment > 0 ? (summary.budget / plan.totalInvestment) * 100 : 0),
+                formatNumber(summary.impressoes),
+                formatNumber(summary.cliques),
+                formatNumber(summary.conversoes),
+                formatPercentage(summary.taxaConversao)
+            ]],
+            startY: PAGE_MARGIN + 60 + 2 * (cardHeight + 20),
+            theme: 'striped',
+            headStyles: { fillColor: PRIMARY_COLOR, textColor: '#fff', fontStyle: 'bold' },
+            footStyles: { fillColor: '#e2e8f0', textColor: TEXT_COLOR, fontStyle: 'bold' },
+            styles: { fontSize: 9, cellPadding: 5 },
+            columnStyles: { 0: {fontStyle: 'bold'}},
+            didDrawPage: (data) => addFooter(doc),
+        });
+
+        // --- Charts Page (General) ---
+        doc.addPage();
+        addHeader(doc);
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(t('Distribuição de Investimento (Geral)'), PAGE_MARGIN, PAGE_MARGIN + 25);
+        
+        const chartConfigs = [
+            { title: t("Investimento por Canal"), data: processChartData(allCampaigns, 'canal') },
+            { title: t("Investimento por Tipo de Campanha"), data: processChartData(allCampaigns, 'tipoCampanha') },
+            { title: t("Investimento por Formato"), data: processChartData(allCampaigns, 'formato') },
+            { title: t("Investimento por Etapa Funil"), data: processChartData(allCampaigns, 'etapaFunil') }
+        ].filter(c => c.data.length > 0);
+
+        const chartW = 300, chartH = 180;
+        const chartAreaH = chartH + 30; // height for chart + title
+        for (let i = 0; i < chartConfigs.length; i++) {
+            const config = createChartConfig(chartConfigs[i].data);
+            const image = await generateChartImage(config, chartW, chartH);
+            const x = PAGE_MARGIN + 50 + (i % 2) * (chartW + 40);
+            const y = PAGE_MARGIN + 60 + Math.floor(i / 2) * (chartAreaH + 20);
+
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(TEXT_COLOR);
+            doc.text(chartConfigs[i].title, x, y - 5, { align: 'left' });
+            
+            doc.addImage(image, 'PNG', x - 40, y + 10, chartW, chartH);
+        }
+        addFooter(doc);
+    }
+    
+    // --- Monthly Detail Pages ---
+    const sortedMonths = Object.keys(plan.months || {}).sort(sortMonthKeys);
+    for (const month of sortedMonths) {
+        doc.addPage();
+        addHeader(doc);
+        const campaigns = plan.months[month];
+        const [year, monthName] = month.split('-');
+        const monthTitle = `${t(monthName)} ${year}`;
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(t('Plano de Mídia - {month}', {month: monthTitle}), PAGE_MARGIN, PAGE_MARGIN + 25);
+        
+        if (campaigns && campaigns.length > 0) {
+            const head = [[t('Tipo'), t('Funil'), t('Canal'), t('Formato'), t('Público-Alvo'), t('KPI'), t('Budget'), 'Impr.', 'Alcance', 'Cliques', 'CTR', 'Conv.', 'Tx. Conv.', 'CPA']];
+            const body = campaigns.map(c => [
+                c.tipoCampanha || '', c.etapaFunil || '', c.canal || '', c.formato || '',
+                c.publicoAlvo || '', c.kpi || '', formatCurrency(c.budget), formatNumber(c.impressoes),
+                formatNumber(c.alcance), formatNumber(c.cliques), formatPercentage(c.ctr),
+                formatNumber(c.conversoes), formatPercentage(c.taxaConversao), formatCurrency(c.cpa),
+            ]);
+            autoTable(doc, {
+                head, body,
+                startY: PAGE_MARGIN + 45,
+                theme: 'striped',
+                styles: { fontSize: 6.5, cellPadding: 4, valign: 'middle', overflow: 'linebreak' },
+                headStyles: { fillColor: PRIMARY_COLOR, textColor: '#ffffff', fontStyle: 'bold', halign: 'center' },
+                bodyStyles: { textColor: TEXT_COLOR },
+                alternateRowStyles: { fillColor: '#f8fafc' },
+                columnStyles: {
+                  0: { cellWidth: 50 }, // Tipo
+                  1: { cellWidth: 40 }, // Funil
+                  2: { cellWidth: 50 }, // Canal
+                  3: { cellWidth: 50 }, // Formato
+                  4: { cellWidth: 90}, // Publico
+                  5: { cellWidth: 60}, // KPI
+                  6: { halign: 'right', cellWidth: 50 }, // Budget
+                  7: { halign: 'right', cellWidth: 45 }, // Impr
+                  8: { halign: 'right', cellWidth: 45 }, // Alcance
+                  9: { halign: 'right', cellWidth: 45 }, // Cliques
+                  10: { halign: 'right', cellWidth: 40 }, // CTR
+                  11: { halign: 'right', cellWidth: 35 }, // Conv
+                  12: { halign: 'right', cellWidth: 40 }, // Tx Conv
+                  13: { halign: 'right', cellWidth: 40 }, // CPA
+                },
+                didDrawPage: (data) => addFooter(doc),
+            });
+             
+             // Monthly charts
+             doc.addPage();
+             addHeader(doc);
+             doc.setFontSize(18);
+             doc.setFont('helvetica', 'bold');
+             doc.setTextColor(TEXT_COLOR);
+             doc.text(t('Distribuição de Investimento ({month})', { month: monthTitle }), PAGE_MARGIN, PAGE_MARGIN + 25);
+             
+             const monthlyChartConfigs = [
+                 { title: t("Investimento por Canal"), data: processChartData(campaigns, 'canal') },
+                 { title: t("Investimento por Tipo de Campanha"), data: processChartData(campaigns, 'tipoCampanha') },
+                 { title: t("Investimento por Formato"), data: processChartData(campaigns, 'formato') },
+                 { title: t("Investimento por Etapa Funil"), data: processChartData(campaigns, 'etapaFunil') }
+             ].filter(c => c.data.length > 0);
+
+             const chartW = 300, chartH = 180;
+             const chartAreaH = chartH + 30;
+             for (let i = 0; i < monthlyChartConfigs.length; i++) {
+                 const config = createChartConfig(monthlyChartConfigs[i].data);
+                 const image = await generateChartImage(config, chartW, chartH);
+                 const x = PAGE_MARGIN + 50 + (i % 2) * (chartW + 40);
+                 const y = PAGE_MARGIN + 60 + Math.floor(i / 2) * (chartAreaH + 20);
+
+                 doc.setFontSize(12);
+                 doc.setFont('helvetica', 'bold');
+                 doc.setTextColor(TEXT_COLOR);
+                 doc.text(monthlyChartConfigs[i].title, x, y - 5, { align: 'left' });
+                 
+                 doc.addImage(image, 'PNG', x - 40, y + 10, chartW, chartH);
+             }
+             addFooter(doc);
+        } else {
+             doc.setFontSize(12);
+             doc.setTextColor(LIGHT_TEXT_COLOR);
+             doc.text(t('Nenhuma campanha adicionada para {month}.', { month: monthTitle }), PAGE_MARGIN, PAGE_MARGIN + 60);
+             addFooter(doc);
+        }
+    }
+
+    doc.save(`${plan.campaignName.replace(/[^\w\s]/gi, '').replace(/ /g, '_')}_MasterPlan.pdf`);
 };
 
 const toCSV = (headers: string[], data: any[][]): string => {
