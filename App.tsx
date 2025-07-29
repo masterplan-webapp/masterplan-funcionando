@@ -1,7 +1,8 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, KeyRound, ImageIcon } from 'lucide-react';
+import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, KeyRound, ImageIcon } from 'https://esm.sh/lucide-react@^0.523.0';
 
 import { MONTHS_LIST, DEFAULT_METRICS_BY_OBJECTIVE } from './constants';
 import { getPlans, savePlan, deletePlan, createNewEmptyPlan, createNewPlanFromTemplate, generateAIPlan, calculateKPIs, sortMonthKeys, exportPlanAsPDF, getPlanById } from './services';
@@ -641,15 +642,8 @@ function AppLogic() {
         }
     }, [activePlan, t]);
 
-    const handleGetShareLink = useCallback(async () => {
+    const handleGetShareLink = useCallback(() => {
         if (!activePlan) return;
-
-        // Set the plan to public before generating the link
-        if (!activePlan.is_public) {
-            const updatedPlan = { ...activePlan, is_public: true };
-            await handlePlanUpdate(updatedPlan);
-        }
-
         // This relies on browser environment.
         try {
             const link = window.location.origin + `?view=share&planId=${activePlan.id}`;
@@ -660,7 +654,7 @@ function AppLogic() {
             console.error(e);
         }
         setShareModalOpen(true);
-    }, [activePlan, t, handlePlanUpdate]);
+    }, [activePlan, t]);
 
 
     if (loading) {
