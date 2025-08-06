@@ -554,10 +554,17 @@ function AppLogic() {
     }, [user, language, t, selectActivePlan]);
 
     const handleRegenerateAIPlan = useCallback(async (prompt: string) => {
-        if (!user || !activePlan) return;
+        console.log("handleRegenerateAIPlan iniciado com prompt:", prompt);
+        if (!user || !activePlan) {
+            console.error("Erro: usuário ou plano ativo não definido", { user: !!user, activePlan: !!activePlan });
+            return;
+        }
         setIsRegeneratingPlan(true);
         try {
+            console.log("Chamando generateAIPlan com prompt e idioma:", { prompt, language });
             const aiData = await generateAIPlan(prompt, language);
+            console.log("Resposta de generateAIPlan recebida:", aiData);
+            
             const updatedPlan = { ...activePlan };
 
             updatedPlan.objective = aiData.objective || updatedPlan.objective;
@@ -568,20 +575,31 @@ function AppLogic() {
             updatedPlan.months = {};
 
             if (aiData.months) {
+                console.log("Processando meses do plano:", Object.keys(aiData.months));
                 for (const monthKey in aiData.months) {
                     updatedPlan.months[monthKey] = (aiData.months[monthKey] as Campaign[]).map((c, index) => {
                         const defaults = DEFAULT_METRICS_BY_OBJECTIVE[c.tipoCampanha || ''] || {};
                         return calculateKPIs({ ...defaults, ...c, id: `c_ai_${new Date().getTime()}_${index}` });
                     });
                 }
+            } else {
+                console.warn("Nenhum mês retornado pela API");
             }
+            
+            console.log("Atualizando plano com novos dados");
             await handlePlanUpdate(updatedPlan);
+            console.log("Plano atualizado com sucesso");
 
         } catch (error) {
             console.error("Error regenerating AI plan:", error);
+            if (error instanceof Error) {
+                console.error("Mensagem de erro:", error.message);
+                console.error("Stack trace:", error.stack);
+            }
             alert(t('Erro ao criar o plano com IA. Por favor, tente novamente.'));
             throw error;
         } finally {
+            console.log("Finalizando regeneração do plano");
             setIsRegeneratingPlan(false);
         }
     }, [user, activePlan, language, t, handlePlanUpdate]);

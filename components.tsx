@@ -816,9 +816,12 @@ export const AddMonthModal: React.FC<AddMonthModalProps> = ({ isOpen, onClose, o
 export const AIPlanCreationModal: React.FC<AIPlanCreationModalProps> = ({ isOpen, onClose, onGenerate, isLoading, initialPrompt, title, buttonText, loadingText }) => {
     const { t } = useLanguage();
     const [prompt, setPrompt] = useState(initialPrompt || '');
+    
+    console.log("AIPlanCreationModal renderizado", { isOpen, isLoading, initialPrompt });
 
     useEffect(() => {
         if (initialPrompt) {
+            console.log("Atualizando prompt com initialPrompt:", initialPrompt);
             setPrompt(initialPrompt);
         }
     }, [initialPrompt]);
@@ -826,8 +829,17 @@ export const AIPlanCreationModal: React.FC<AIPlanCreationModalProps> = ({ isOpen
     if (!isOpen) return null;
 
     const handleGenerate = async () => {
+        console.log("handleGenerate chamado com prompt:", prompt);
         if (prompt.trim()) {
-            await onGenerate(prompt);
+            try {
+                console.log("Chamando onGenerate");
+                await onGenerate(prompt);
+                console.log("onGenerate concluído com sucesso");
+            } catch (error) {
+                console.error("Erro ao chamar onGenerate:", error);
+            }
+        } else {
+            console.warn("Prompt vazio, não chamando onGenerate");
         }
     };
     

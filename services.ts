@@ -9,6 +9,8 @@ import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 import { Database, PlanData, Campaign, User, LanguageCode, KeywordSuggestion, CreativeTextData, AdGroup, UTMLink, GeneratedImage, AspectRatio, SummaryData, MonthlySummary } from './types';
 import { MONTHS_LIST, OPTIONS, CHANNEL_FORMATS, DEFAULT_METRICS_BY_OBJECTIVE } from "./constants";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 
 // --- Supabase Client ---
@@ -34,12 +36,6 @@ const getAiClient = (): GoogleGenAI => {
         // This will only be called when an AI function is used for the first time.
         // It assumes process.env.API_KEY is available at that point.
         ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    }
-    return ai;
-};
-
-
-// --- UTILITY FUNCTIONS ---
 export const formatCurrency = (value?: number | string): string => {
     const numberValue = Number(value) || 0;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
@@ -189,7 +185,60 @@ export const getPublicProfileByUserId = async (userId: string): Promise<{ displa
         }
         return null;
     }
-    return data;
+    return data as { display_name: string | null, photo_url: string | null } | null;
+};
+
+        }
+export const exportPlanAsPDF = async (planData: PlanData, elementId: string): Promise<void> => {
+    try {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            console.error('Element not found for PDF export');
+            return;
+        }
+
+        // Create a clone of the element to avoid modifying the original
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.style.width = '1200px'; // Set a fixed width for better PDF layout
+        clone.style.padding = '20px';
+        clone.style.backgroundColor = '#ffffff';
+        document.body.appendChild(clone);
+
+        // Capture the element as canvas
+        const canvas = await html2canvas(clone, {
+            scale: 1,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+        });
+
+        // Remove the clone from the DOM
+        document.body.removeChild(clone);
+
+        // Create PDF
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const imgWidth = 277; // A4 landscape width in mm (297 - margins)
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+        
+        // Add a second page if content is too long
+        if (imgHeight > 190) { // A4 landscape height in mm (210 - margins)
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 10, -(190 - 10), imgWidth, imgHeight);
+        }
+
+        // Save the PDF
+        pdf.save(`${planData.campaignName || 'media-plan'}.pdf`);
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+    }
 };
 
 
@@ -416,7 +465,7 @@ export const callGeminiAPI = async (prompt: string, isJson: boolean = false): Pr
             ...(isJson && { config: { responseMimeType: "application/json" } })
         });
         
-        const text = response.text.trim();
+        const text = response.text?.trim() || "";
 
         if (isJson) {
             const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
@@ -437,9 +486,6 @@ export const generateAIPlan = async (userPrompt: string, language: LanguageCode)
 
     const systemInstruction = `You are a senior media planner. Your task is to create a digital media plan from a user's description.
 - Analyze the user's prompt to determine the time period for the plan (e.g., "for the next quarter", "for July and August 2024", "for the last quarter of the year").
-- If no period is specified, create a plan for the next 3 months starting from the current date.
-- The output MUST be a valid JSON object, with no additional text or explanations. Do not use markdown.
-- For each campaign, you must provide:
   - 'publicoAlvo': A specific target audience, refining the main 'targetAudience' for that campaign's specific goal.
   - 'kpi': The main Key Performance Indicators (e.g., "Cliques, CPC", "Impressões, Alcance").
   - 'unidadeCompra': Select 'CPC' for performance-oriented campaigns (like Tráfego, Conversão) and 'CPM' for reach/awareness campaigns (like Awareness, Alcance).
@@ -506,136 +552,18 @@ ${langInstruction}`;
                 responseMimeType: "application/json",
                 responseSchema: schema
             },
+        const text = response.text?.trim() || "";
+        const response = await aiClient.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: [{ parts: [{ text: `Business Description: "${userPrompt}"` }] }],
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: schema
+            },
         });
-        const text = response.text.trim();
+        const text = response.text?.trim() || "";
         const aiData = JSON.parse(text);
-
-        // Transform the months array into a Record<string, Campaign[]>
-        const transformedMonths = (aiData.months || []).reduce((acc: Record<string, Campaign[]>, item: { month: string; campaigns: Campaign[] }) => {
-            if (item.month && item.campaigns) {
-                 acc[item.month] = item.campaigns;
-            }
-            return acc;
-        }, {});
-        
-        // Return the plan data with the transformed months structure
-        const { months, ...restOfAiData } = aiData;
-        return { ...restOfAiData, months: transformedMonths };
-
-    } catch (error) {
-        console.error("Error generating AI plan:", error);
-        if (error instanceof Error && (error.message.includes('responseSchema') || error.message.includes('JSON'))) {
-            throw new Error("The AI response did not match the required format. Please try again.");
-        }
-        throw new Error("Failed to parse AI response or call API.");
-    }
-};
-
-
-export const generateAIKeywords = async (plan: PlanData, mode: 'seed' | 'prompt', input: string, language: LanguageCode): Promise<KeywordSuggestion[]> => {
-    const langInstruction = language === 'pt-BR' ? 'Responda em Português do Brasil.' : 'Respond in English.';
-    const systemInstruction = `You are an SEO and SEM expert. Your task is to generate a list of relevant keywords. For each keyword, provide an estimated monthly search volume (integer), click potential (integer), and a min/max CPC (float). The result MUST be a valid JSON array of keyword objects. Do not include additional text or markdown. ${langInstruction}`;
-    const prompt = `Generate 20 keywords for the following context:\n- Plan Objective: ${plan.objective}\n- Target Audience: ${plan.targetAudience}\n- ${mode === 'seed' ? 'Seed Keywords' : 'Description'}: ${input}`;
-    const schema = { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { keyword: { type: Type.STRING }, volume: { type: Type.INTEGER }, clickPotential: { type: Type.INTEGER }, minCpc: { type: Type.NUMBER }, maxCpc: { type: Type.NUMBER } }, required: ["keyword", "volume", "clickPotential", "minCpc", "maxCpc"] } };
-
-    try {
-        const aiClient = getAiClient();
-        const response = await aiClient.models.generateContent({ model: "gemini-2.5-flash", contents: [{ parts: [{ text: prompt }] }], config: { systemInstruction, responseMimeType: "application/json", responseSchema: schema } });
-        return JSON.parse(response.text.trim());
-    } catch (error) {
-        console.error("Error generating keywords:", error);
-        throw new Error("Failed to generate keywords from AI.");
-    }
-};
-
-export const generateAIImages = async (prompt: string): Promise<GeneratedImage[]> => {
-    try {
-        const aiClient = getAiClient();
-        const aspectRatios: AspectRatio[] = ['1:1', '16:9', '9:16', '3:4'];
-        const imagePromises = aspectRatios.map(aspectRatio =>
-            aiClient.models.generateImages({ model: 'imagen-3.0-generate-002', prompt, config: { numberOfImages: 1, outputMimeType: 'image/jpeg', aspectRatio } })
-        );
-        const responses = await Promise.all(imagePromises);
-        return responses.map((response, index) => ({
-            base64: response.generatedImages[0].image.imageBytes,
-            aspectRatio: aspectRatios[index],
-        }));
-    } catch (error) {
-        console.error("Error generating images:", error);
-        throw new Error("Failed to generate images from AI.");
-    }
-};
-
-// --- Export Services ---
-
-const toCSV = (headers: string[], data: any[][]): string => {
-    const headerRow = headers.join(',');
-    const dataRows = data.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','));
-    return [headerRow, ...dataRows].join('\n');
-};
-
-export const exportCreativesAsCSV = (plan: PlanData, t: (key: string) => string) => {
-    const headers = [t('Canal'), t('Nome do Grupo de Criativos'), t('Contexto para a IA'), t('Tipo'), t('Texto')];
-    const data: any[][] = [];
-    Object.entries(plan.creatives || {}).forEach(([channel, groups]) => {
-        groups.forEach(group => {
-            group.headlines.forEach(h => data.push([channel, group.name, group.context, t('Títulos (Headlines)'), h]));
-            (group.longHeadlines || []).forEach(lh => data.push([channel, group.name, group.context, t('Títulos Longos (Long Headlines)'), lh]));
-            group.descriptions.forEach(d => data.push([channel, group.name, group.context, t('Descrições (Descriptions)'), d]));
-        });
-    });
-    const csv = toCSV(headers, data);
-    downloadFile(`${plan.campaignName}_creatives.csv`, csv, 'text/csv;charset=utf-8;');
-};
-
-export const exportCreativesAsTXT = (plan: PlanData, t: (key: string) => string) => {
-    let content = `${t('copy_builder')} - ${plan.campaignName}\n\n`;
-    Object.entries(plan.creatives || {}).forEach(([channel, groups]) => {
-        content += `--- ${t('Canal')}: ${channel} ---\n\n`;
-        groups.forEach(group => {
-            content += `> ${t('Nome do Grupo de Criativos')}: ${group.name}\n`;
-            content += `> ${t('Contexto para a IA')}: ${group.context}\n\n`;
-            content += `${t('Títulos (Headlines)')}:\n${group.headlines.map(h => `- ${h}`).join('\n')}\n\n`;
-            content += `${t('Títulos Longos (Long Headlines)')}:\n${(group.longHeadlines || []).map(h => `- ${h}`).join('\n')}\n\n`;
-            content += `${t('Descrições (Descriptions)')}:\n${group.descriptions.map(d => `- ${d}`).join('\n')}\n\n`;
-            content += `-------------------------\n\n`;
-        });
-    });
-    downloadFile(`${plan.campaignName}_creatives.txt`, content, 'text/plain;charset=utf-8;');
-};
-
-export const exportUTMLinksAsCSV = (plan: PlanData, t: (key: string) => string) => {
-    const headers = [t('Data'), t('URL Completa'), 'URL', 'Source', 'Medium', t('Campanha'), 'Term', 'Content'];
-    const data = (plan.utmLinks || []).map(link => [link.createdAt, link.fullUrl, link.url, link.source, link.medium, link.campaign, link.term, link.content]);
-    const csv = toCSV(headers, data);
-    downloadFile(`${plan.campaignName}_utm_links.csv`, csv, 'text/csv;charset=utf-8;');
-};
-
-export const exportUTMLinksAsTXT = (plan: PlanData, t: (key: string) => string) => {
-    let content = `${t('utm_builder')} - ${plan.campaignName}\n\n`;
-    (plan.utmLinks || []).forEach(link => {
-        content += `${t('Data')}: ${new Date(link.createdAt).toLocaleString()}\n`;
-        content += `${t('Campanha')}: ${link.campaign}\n`;
-        content += `URL: ${link.fullUrl}\n\n`;
-    });
-    downloadFile(`${plan.campaignName}_utm_links.txt`, content, 'text/plain;charset=utf-8;');
-};
-
-export const exportGroupedKeywordsAsCSV = (plan: PlanData, t: (key: string) => string) => {
-    const headers = [t('ad_group_column'), t('keyword'), t('search_volume'), t('estimated_clicks'), t('min_cpc'), t('max_cpc')];
-    const data: any[][] = [];
-    (plan.adGroups || []).forEach(group => {
-        group.keywords.forEach(kw => {
-            data.push([group.name, kw.keyword, kw.volume, kw.clickPotential, kw.minCpc, kw.maxCpc]);
-        });
-    });
-    const csv = toCSV(headers, data);
-    downloadFile(`${plan.campaignName}_keywords.csv`, csv, 'text/csv;charset=utf-8;');
-};
-
-export const exportGroupedKeywordsAsTXT = (plan: PlanData, t: (key: string) => string) => {
-    let content = `${t('keyword_builder')} - ${plan.campaignName}\n\n`;
-    (plan.adGroups || []).forEach(group => {
         content += `--- ${t('ad_group_column')}: ${group.name} ---\n\n`;
         group.keywords.forEach(kw => {
             content += `${kw.keyword}\n`;
