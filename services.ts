@@ -14,8 +14,8 @@ import html2canvas from 'html2canvas';
 
 // --- Supabase Client ---
 // NOVO PROJETO SUPABASE - Credenciais atualizadas
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ddafoalanoouvtbiluyy.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkYWZvYWxhbm9vdXZ0YmlsdXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5Mjg0ODQsImV4cCI6MjA3MDUwNDQ4NH0._P7ONuqxV-p6MnWIGtH9Xy713coN3jBZ0Hl1mghUFJg';
+const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://ddafoalanoouvtbiluyy.supabase.co';
+const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkYWZvYWxhbm9vdXZ0YmlsdXl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5Mjg0ODQsImV4cCI6MjA3MDUwNDQ4NH0._P7ONuqxV-p6MnWIGtH9Xy713coN3jBZ0Hl1mghUFJg';
 
 // INSTRUÇÕES PARA CONFIGURAR NOVO PROJETO SUPABASE:
 // 1. Acesse https://supabase.com e crie um novo projeto
