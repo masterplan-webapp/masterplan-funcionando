@@ -248,6 +248,7 @@ export interface AuthContextType {
     signOut: () => Promise<void>;
     loading: boolean;
     updateUser: (newDetails: Partial<User>) => Promise<void>; // Now async
+    authError: string | null;
 }
 
 // COMPONENT PROPS

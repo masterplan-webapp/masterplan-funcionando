@@ -610,6 +610,7 @@ export const LoginPage: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log('Login form submitted', { email, password: '***', isSignUp });
         setError('');
         try {
             if (isSignUp) {
@@ -617,11 +618,16 @@ export const LoginPage: React.FC = () => {
                     setError('Display name is required for sign up.');
                     return;
                 }
+                console.log('Attempting sign up...');
                 await signUpWithEmail(email, password, displayName);
+                console.log('Sign up successful');
             } else {
+                console.log('Attempting sign in...');
                 await signInWithEmail(email, password);
+                console.log('Sign in successful');
             }
         } catch (err: any) {
+            console.error('Login error:', err);
             setError(err.message || 'An error occurred.');
         }
     };
@@ -1161,7 +1167,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ planData, onNaviga
         Object.values(planData.months || {}).flat()
     , [planData.months]);
 
-    const { summary, monthlySummary } = useMemo(() => calculatePlanSummary(planData), [planData]);
+    const { summary, monthlySummary } = useMemo(() => {
+        const result = calculatePlanSummary(planData);
+        return {
+            summary: result?.summary || {
+                budget: 0,
+                impressoes: 0,
+                cliques: 0,
+                conversoes: 0,
+                alcance: 0,
+                ctr: 0,
+                cpc: 0,
+                cpm: 0,
+                cpa: 0,
+                taxaConversao: 0,
+                channelBudgets: {}
+            },
+            monthlySummary: result?.monthlySummary || {}
+        };
+    }, [planData]);
 
     const handleAnalyzePlan = async () => {
         setAIAnalysisModalOpen(true);
@@ -1732,8 +1756,14 @@ const CreativeGroup: React.FC<CreativeGroupProps> = ({ group, channel, onUpdate,
                 Generate 3 headlines, 2 long headlines, and 2 descriptions. Tailor the tone and style to the specified ad channel.
                 ${langInstruction}
             `;
-            const result = await callGeminiAPI(prompt, true);
-            setAISuggestions(result);
+            const result = await callGeminiAPI(prompt);
+            try {
+                const parsedResult = JSON.parse(result || '{}');
+                setAISuggestions(parsedResult);
+            } catch (parseError) {
+                console.error('Failed to parse AI suggestions:', parseError);
+                setAISuggestions(null);
+            }
         } catch (error) {
             console.error(error);
             alert(t('Falha ao gerar sugestões.'));
@@ -1910,9 +1940,9 @@ export const CopyBuilderPage: React.FC<CopyBuilderPageProps> = ({ planData, onPl
 
     const handleExport = (type: 'csv' | 'txt') => {
         if (type === 'csv') {
-            exportCreativesAsCSV(planData, t);
+            exportCreativesAsCSV(planData.creatives || {}, 'campaign-export');
         } else {
-            exportCreativesAsTXT(planData, t);
+            exportCreativesAsTXT(planData.creatives || {}, 'campaign-export');
         }
         setExportType(null);
     }
@@ -2114,8 +2144,8 @@ export const UTMBuilderPage: React.FC<UTMBuilderPageProps> = ({ planData, onPlan
                         <div className="mt-4 pt-4 border-t dark:border-gray-700">
                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('Exportar como:')}</label>
                              <div className="flex gap-2 mt-1">
-                                <button onClick={() => exportUTMLinksAsCSV(planData, t)} className="flex-1 text-xs px-2 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700">{t('export_as_csv')}</button>
-                                <button onClick={() => exportUTMLinksAsTXT(planData, t)} className="flex-1 text-xs px-2 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700">{t('export_as_txt')}</button>
+                                <button onClick={() => exportUTMLinksAsCSV(planData.utmLinks || [], 'utm-export')} className="flex-1 text-xs px-2 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700">{t('export_as_csv')}</button>
+                <button onClick={() => exportUTMLinksAsTXT(planData.utmLinks || [], 'utm-export')} className="flex-1 text-xs px-2 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700">{t('export_as_txt')}</button>
                              </div>
                         </div>
                     )}
@@ -2179,7 +2209,7 @@ export const KeywordBuilderPage: React.FC<KeywordBuilderPageProps> = ({ planData
         setIsLoading(true);
         setError(null);
         try {
-            const newKeywords = await generateAIKeywords(planData, generationMode, inputValue, language);
+            const newKeywords = await generateAIKeywords(inputValue);
             const currentUnassigned = adGroups.find(g => g.id === 'unassigned')?.keywords || [];
             
             // Filter out duplicates

@@ -1,8 +1,8 @@
 
 
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, KeyRound, ImageIcon } from 'https://esm.sh/lucide-react@^0.523.0';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
+import { ChevronDown, PlusCircle, Trash2, Edit, Save, X, Menu, FileDown, Settings, Sparkles, Loader as LoaderIcon, Copy, Check, Upload, Link2, LayoutDashboard, List, PencilRuler, FileText, Sheet, Sun, Moon, LogOut, Wand2, FilePlus2, ArrowLeft, MoreVertical, User as UserIcon, KeyRound, ImageIcon, AlertTriangle, RefreshCw } from 'lucide-react';
 
 import { MONTHS_LIST, DEFAULT_METRICS_BY_OBJECTIVE } from './constants';
 import { getPlans, savePlan, deletePlan, createNewEmptyPlan, createNewPlanFromTemplate, generateAIPlan, calculateKPIs, sortMonthKeys, exportPlanAsPDF, getPlanById } from './services';
@@ -26,13 +26,81 @@ import {
 } from './components';
 
 
+// --- Error Boundary Component ---
+interface ErrorBoundaryState {
+    hasError: boolean;
+    error?: Error;
+    errorInfo?: ErrorInfo;
+}
+
+class ErrorBoundary extends Component<{children: ReactNode}, ErrorBoundaryState> {
+    constructor(props: {children: ReactNode}) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        console.error('Error Boundary caught an error:', error, errorInfo);
+        this.setState({ error, errorInfo });
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+                        <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+                        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                            Oops! Algo deu errado
+                        </h1>
+                        <p className="text-gray-600 dark:text-gray-300 mb-6">
+                            Ocorreu um erro inesperado. Por favor, recarregue a página ou tente novamente.
+                        </p>
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                                <RefreshCw size={16} />
+                                Recarregar Página
+                            </button>
+                            <button
+                                onClick={() => this.setState({ hasError: false, error: undefined, errorInfo: undefined })}
+                                className="w-full bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                            >
+                                Tentar Novamente
+                            </button>
+                        </div>
+                        {this.state.error && (
+                            <details className="mt-4 text-left">
+                                <summary className="cursor-pointer text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+                                    Detalhes do erro
+                                </summary>
+                                <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded overflow-auto max-h-32">
+                                    {this.state.error.toString()}
+                                </pre>
+                            </details>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
+}
+
 // --- Layout Components ---
 
 // Inlined props to avoid changing types.ts
 interface CustomSidebarProps {
     isCollapsed: boolean;
     isMobileOpen: boolean;
-    activePlan: PlanData;
+    activePlan: PlanData | null;
     activeView: string;
     handleNavigate: (view: string) => void;
     handleBackToDashboard: () => void;
@@ -48,8 +116,8 @@ const Sidebar: React.FC<CustomSidebarProps> = ({ isCollapsed, isMobileOpen, acti
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
     const plannedMonths = useMemo(() => 
-        Object.keys(activePlan.months || {}).sort(sortMonthKeys)
-    , [activePlan.months]);
+        Object.keys(activePlan?.months || {}).sort(sortMonthKeys)
+    , [activePlan?.months]);
     
     const formatMonthDisplay = (monthKey: string) => {
         const [year, monthName] = monthKey.split('-');
@@ -74,8 +142,8 @@ const Sidebar: React.FC<CustomSidebarProps> = ({ isCollapsed, isMobileOpen, acti
                     </button>
                 </div>
                  <div className={`text-center mb-4 ${isCollapsed ? '' : 'px-2'}`}>
-                     {activePlan.logoUrl && <img src={activePlan.logoUrl} alt="Logo do Cliente" className={`rounded-md mb-4 object-cover border border-gray-700 mx-auto transition-all duration-300 ${isCollapsed ? 'w-10 h-10' : 'w-24 h-24'}`} onError={(e) => { const target = e.target as HTMLImageElement; target.onerror = null; target.src='https://placehold.co/100x100/7F1D1D/FFFFFF?text=Error'; }} />}
-                    <p className={`text-lg font-semibold text-gray-200 break-words ${isCollapsed ? 'hidden' : 'block'}`}>{activePlan.campaignName || t("Nome da Campanha")}</p>
+                     {activePlan?.logoUrl && <img src={activePlan.logoUrl} alt="Logo do Cliente" className={`rounded-md mb-4 object-cover border border-gray-700 mx-auto transition-all duration-300 ${isCollapsed ? 'w-10 h-10' : 'w-24 h-24'}`} onError={(e) => { const target = e.target as HTMLImageElement; target.onerror = null; target.src='https://placehold.co/100x100/7F1D1D/FFFFFF?text=Error'; }} />}
+                    <p className={`text-lg font-semibold text-gray-200 break-words ${isCollapsed ? 'hidden' : 'block'}`}>{activePlan?.campaignName || t("Nome da Campanha")}</p>
                 </div>
                 <nav>
                     <ul>
@@ -123,10 +191,10 @@ const Sidebar: React.FC<CustomSidebarProps> = ({ isCollapsed, isMobileOpen, acti
             </div>
              <div className="p-2 border-t border-gray-700/50 relative">
                  <button onClick={() => setIsUserMenuOpen(prev => !prev)} className={`flex items-center gap-3 w-full hover:bg-gray-700/70 rounded-md transition-colors ${isCollapsed ? 'p-1 justify-center' : 'p-2'}`}>
-                     <img src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=0D8ABC&color=fff&size=32`} alt="User avatar" className="w-8 h-8 rounded-full flex-shrink-0"/>
+                     <img src={user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName || 'User')}&background=0D8ABC&color=fff&size=32`} alt="User avatar" className="w-8 h-8 rounded-full flex-shrink-0"/>
                      <div className={`text-left overflow-hidden flex-1 ${isCollapsed ? 'hidden' : 'block'}`}>
-                        <p className="text-sm font-semibold text-white truncate">{user.displayName || 'Usuário'}</p>
-                        <p className="text-xs text-gray-400 truncate">{user.email || 'email@example.com'}</p>
+                        <p className="text-sm font-semibold text-white truncate">{user?.displayName || 'Usuário'}</p>
+                        <p className="text-xs text-gray-400 truncate">{user?.email || 'email@example.com'}</p>
                      </div>
                      <MoreVertical size={18} className={`text-gray-400 ${isCollapsed ? 'hidden' : 'inline'}`} />
                  </button>
@@ -329,8 +397,19 @@ const UserProfileModalInternal: React.FC<UserProfileModalProps> = ({ isOpen, onC
 
 // --- Main Application Logic ---
 function AppLogic() {
-    const { user, loading, signOut } = useAuth();
+    const { user, loading, signOut, authError } = useAuth();
     const { t, language } = useLanguage();
+    
+    // Debug logging for white screen issue
+    useEffect(() => {
+        console.log('AppLogic Debug:', {
+            user: user ? { id: user.id, email: user.email } : null,
+            loading,
+            authError,
+            userAgent: navigator.userAgent,
+            url: window.location.href
+        });
+    }, [user, loading, authError]);
 
     const [allPlans, setAllPlans] = useState<PlanData[]>([]);
     const [activePlan, setActivePlan] = useState<PlanData | null>(null);
@@ -511,8 +590,8 @@ function AppLogic() {
             const aiData = await generateAIPlan(prompt, language);
             
             const newPlan: PlanData = {
-                id: `plan_${new Date().getTime()}`,
-                user_id: user.id,
+                id: crypto.randomUUID(),
+                user_id: user.id!,
                 campaignName: aiData.campaignName || 'Novo Plano (IA)',
                 objective: aiData.objective || '',
                 targetAudience: aiData.targetAudience || '',
@@ -546,12 +625,13 @@ function AppLogic() {
             }
         } catch (error) {
             console.error("Error creating AI plan:", error);
-            alert(t('Erro ao criar o plano com IA. Por favor, tente novamente.'));
+            const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao criar o plano com IA';
+            alert(`Erro ao criar o plano com IA: ${errorMessage}`);
             throw error;
         } finally {
             setIsGeneratingPlan(false);
         }
-    }, [user, language, t, selectActivePlan]);
+    }, [user, language, selectActivePlan]);
 
     const handleRegenerateAIPlan = useCallback(async (prompt: string) => {
         console.log("handleRegenerateAIPlan iniciado com prompt:", prompt);
@@ -596,13 +676,14 @@ function AppLogic() {
                 console.error("Mensagem de erro:", error.message);
                 console.error("Stack trace:", error.stack);
             }
-            alert(t('Erro ao criar o plano com IA. Por favor, tente novamente.'));
+            const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao regenerar o plano com IA';
+            alert(`Erro ao regenerar o plano com IA: ${errorMessage}`);
             throw error;
         } finally {
             console.log("Finalizando regeneração do plano");
             setIsRegeneratingPlan(false);
         }
-    }, [user, activePlan, language, t, handlePlanUpdate]);
+    }, [user, activePlan, language, handlePlanUpdate]);
 
     const handleDeletePlan = useCallback(async (planId: string) => {
         if (window.confirm(t('Confirm Delete This Plan'))) {
@@ -629,8 +710,8 @@ function AppLogic() {
         if (!user) return;
         const duplicatePlan: PlanData = {
             ...JSON.parse(JSON.stringify(planToDuplicate)), // Deep copy
-            id: `plan_${new Date().getTime()}`,
-            user_id: user.id,
+            id: crypto.randomUUID(),
+            user_id: user.id!,
             campaignName: `${planToDuplicate.campaignName} ${t('Copy')}`
         };
         const saved = await savePlan(duplicatePlan);
@@ -652,13 +733,13 @@ function AppLogic() {
         if (!activePlan) return;
         setIsExporting(true);
         try {
-            await exportPlanAsPDF(activePlan, t);
+            await exportPlanAsPDF(activePlan, 'plan-content');
         } catch (error) {
             console.error("PDF Export failed:", error);
         } finally {
             setIsExporting(false);
         }
-    }, [activePlan, t]);
+    }, [activePlan]);
 
     const handleGetShareLink = useCallback(() => {
         if (!activePlan) return;
@@ -668,7 +749,7 @@ function AppLogic() {
             setShareLink(link);
         } catch(e) {
             // This might fail in non-browser environments during SSR, etc.
-            setShareLink(t('link_generation_error'));
+            setShareLink(t('link_generation_error') || 'Erro ao gerar link');
             console.error(e);
         }
         setShareModalOpen(true);
@@ -679,11 +760,40 @@ function AppLogic() {
         return <div className="h-screen w-screen flex items-center justify-center bg-gray-900"><LoaderIcon className="animate-spin text-blue-500" size={48}/></div>;
     }
 
+    // Show auth error if present
+    if (authError && !user) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+                    <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                        Erro de Autenticação
+                    </h1>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                        {authError}
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                        <RefreshCw size={16} />
+                        Tentar Novamente
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!user) {
         return <LoginPage />;
     }
     
-    const AppView = ({ activeView, activePlan, ...rest } : { activeView: string, activePlan: PlanData, onPlanUpdate: (plan: PlanData) => Promise<void> } & any) => {
+    const AppView = ({ activeView, activePlan, ...rest } : { activeView: string, activePlan: PlanData | null, onPlanUpdate: (plan: PlanData) => Promise<void> } & any) => {
+        // Safety check - if activePlan is null, return a loading state
+        if (!activePlan) {
+            return <div className="h-full w-full flex items-center justify-center"><LoaderIcon className="animate-spin text-blue-500" size={48}/></div>;
+        }
+        
         if (activeView === 'Overview') {
             return <DashboardPage planData={activePlan} onNavigate={handleNavigate} onAddMonthClick={() => setAddMonthModalOpen(true)} onRegeneratePlan={handleRegenerateAIPlan} isRegenerating={isRegeneratingPlan} />;
         }
@@ -832,12 +942,14 @@ function AppLogic() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <AuthProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <LanguageProvider>
+          <AuthProvider>
             <AppLogic />
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

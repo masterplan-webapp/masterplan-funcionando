@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 import { supabase } from './services';
 import { TRANSLATIONS } from './constants';
 import { Database, LanguageCode, Translations, LanguageContextType, Theme, ThemeContextType, AuthContextType, User } from './types';
@@ -7,7 +7,7 @@ import { AuthChangeEvent, Session, User as SupabaseUser } from '@supabase/supaba
 // --- Language Context ---
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
+export const LanguageProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const [language, setLanguage] = useState<LanguageCode>('pt-BR');
 
     useEffect(() => {
@@ -53,7 +53,7 @@ export const useLanguage = (): LanguageContextType => {
 // --- Theme Context ---
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
+export const ThemeProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const [theme, setTheme] = useState<Theme>('dark'); // Default to dark, will be updated client-side
 
     useEffect(() => {
@@ -102,38 +102,60 @@ export const useTheme = (): ThemeContextType => {
 // --- Auth Context ---
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
+export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [authError, setAuthError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchUserAndProfile = async (supabaseUser: SupabaseUser | null) => {
-            if (supabaseUser) {
-                const { data: profile, error } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', supabaseUser.id)
-                    .single();
+            try {
+                setAuthError(null); // Clear any previous errors
                 
-                if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-                     console.warn('Could not fetch user profile. This is normal for new users or if RLS is enabled. Falling back to auth data.', error.message);
-                }
+                if (supabaseUser) {
+                    const { data: profile, error } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', supabaseUser.id)
+                        .single();
+                    
+                    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+                         console.warn('Could not fetch user profile. This is normal for new users or if RLS is enabled. Falling back to auth data.', error.message);
+                    }
 
-                setUser({
-                    id: supabaseUser.id,
-                    email: supabaseUser.email || null,
-                    displayName: profile?.display_name || supabaseUser.user_metadata?.full_name || supabaseUser.email,
-                    photoURL: profile?.photo_url || supabaseUser.user_metadata?.avatar_url,
-                });
-            } else {
+                    setUser({
+                        id: supabaseUser.id,
+                        email: supabaseUser.email || null,
+                        displayName: profile?.display_name || supabaseUser.user_metadata?.full_name || supabaseUser.email,
+                        photoURL: profile?.photo_url || supabaseUser.user_metadata?.avatar_url,
+                    });
+                } else {
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+                const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido de autenticação';
+                setAuthError(errorMessage);
                 setUser(null);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
+
+        // Add timeout to prevent infinite loading
+        const loadingTimeout = setTimeout(() => {
+            console.warn('Auth loading timeout - setting loading to false');
+            setLoading(false);
+        }, 10000); // 10 seconds timeout
 
         // Fetch user on initial load
         supabase.auth.getSession().then(({ data: { session } }) => {
+            clearTimeout(loadingTimeout);
             fetchUserAndProfile(session?.user ?? null);
+        }).catch((error) => {
+            console.error('Error getting session:', error);
+            clearTimeout(loadingTimeout);
+            setLoading(false);
         });
 
         // Listen for auth state changes
@@ -144,41 +166,82 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         );
 
         return () => {
+            clearTimeout(loadingTimeout);
             authListener?.subscription.unsubscribe();
         };
     }, []);
 
     const signInWithGoogle = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-             options: {
-                redirectTo: window.location.origin, // Redirect back to the app after Google sign-in
+        try {
+            setAuthError(null);
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                 options: {
+                    redirectTo: window.location.origin, // Redirect back to the app after Google sign-in
+                }
+            });
+            if (error) {
+                setAuthError(error.message);
+                throw error;
             }
-        });
-        if (error) throw error;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erro no login com Google';
+            setAuthError(errorMessage);
+            throw error;
+        }
     };
 
     const signInWithEmail = async (email: string, password: string) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        try {
+            setAuthError(null);
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                setAuthError(error.message);
+                throw error;
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erro no login com email';
+            setAuthError(errorMessage);
+            throw error;
+        }
     };
 
     const signUpWithEmail = async (email: string, password: string, displayName: string) => {
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                data: {
-                    full_name: displayName, // This goes to raw_user_meta_data
+        try {
+            setAuthError(null);
+            const { error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        full_name: displayName, // This goes to raw_user_meta_data
+                    }
                 }
+            });
+            if (error) {
+                setAuthError(error.message);
+                throw error;
             }
-        });
-        if (error) throw error;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erro no cadastro';
+            setAuthError(errorMessage);
+            throw error;
+        }
     };
 
     const signOut = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        try {
+            setAuthError(null);
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+                setAuthError(error.message);
+                throw error;
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer logout';
+            setAuthError(errorMessage);
+            throw error;
+        }
     };
 
     const updateUser = async (newDetails: Partial<User>) => {
@@ -212,7 +275,7 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         }
 
         if (data) {
-             setUser(prev => prev ? { ...prev, displayName: data.display_name, photoURL: data.photo_url } : null);
+             setUser((prev: User | null) => prev ? { ...prev, displayName: data.display_name, photoURL: data.photo_url } : null);
         }
     };
 
@@ -223,7 +286,8 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }
         signUpWithEmail,
         signOut,
         loading,
-        updateUser
+        updateUser,
+        authError
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

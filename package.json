@@ -9,18 +9,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^1.6.0",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
+    "lucide-react": "^0.523.0",
+    "marked": "^13.0.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@google/genai": "^1.6.0",
-    "@supabase/supabase-js": "2",
-    "lucide-react": "^0.523.0",
-    "recharts": "^2.12.7",
-    "jspdf": "^2.5.1",
-    "html2canvas": "^1.4.1",
-    "marked": "^13.0.2"
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   }
