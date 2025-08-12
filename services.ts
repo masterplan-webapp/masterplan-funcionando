@@ -8,6 +8,7 @@
 import { PlanData, Campaign, CreativeTextData, KeywordSuggestion, GeneratedImage, AspectRatio, UTMLink, AdGroup } from './types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
+import { CHANNEL_FORMATS } from './constants';
 
 // Configuração da API do Google AI
 const API_KEY = 'AIzaSyBJhJGKJGKJGKJGKJGKJGKJGKJGKJGKJGK'; // Substitua pela sua chave real
@@ -306,8 +307,8 @@ export const createNewPlanFromTemplate = async (userId: string): Promise<PlanDat
                 id: crypto.randomUUID(),
                 tipoCampanha: 'Consideration',
                 etapaFunil: 'Meio',
-                canal: 'Facebook Ads',
-                formato: 'Video',
+                canal: 'Meta Ads',
+                formato: 'Feed',
                 objetivo: 'Gerar interesse e engajamento',
                 kpi: 'Cliques',
                 publicoAlvo: 'Usuários que visitaram o site',
@@ -332,7 +333,7 @@ export const createNewPlanFromTemplate = async (userId: string): Promise<PlanDat
                 tipoCampanha: 'Conversion',
                 etapaFunil: 'Fundo',
                 canal: 'Google Ads',
-                formato: 'Shopping',
+                formato: 'PMax',
                 objetivo: 'Gerar vendas diretas',
                 kpi: 'Conversões',
                 publicoAlvo: 'Usuários com alta intenção de compra',
@@ -356,8 +357,8 @@ export const createNewPlanFromTemplate = async (userId: string): Promise<PlanDat
                 id: crypto.randomUUID(),
                 tipoCampanha: 'Retargeting',
                 etapaFunil: 'Retenção',
-                canal: 'Facebook Ads',
-                formato: 'Carousel',
+                canal: 'Meta Ads',
+                formato: 'Carrossel',
                 objetivo: 'Reengajar usuários anteriores',
                 kpi: 'ROAS',
                 publicoAlvo: 'Visitantes que não converteram',
@@ -518,7 +519,7 @@ export const createNewPlanFromTemplate = async (userId: string): Promise<PlanDat
         creatives,
         adGroups,
         utmLinks,
-        customFormats: ['Banner 300x250', 'Banner 728x90', 'Story 1080x1920'],
+        customFormats: [],
         is_public: false,
         created_at: new Date().toISOString(),
         aiPrompt: 'Criar um plano de mídia completo para empresa de tecnologia focada em soluções de gestão empresarial',
@@ -565,6 +566,17 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
                 }
             }
             
+            FORMATOS PERMITIDOS POR CANAL:
+            - Google Ads: Search, PMax, Display, YouTube, Demand Gen
+            - Meta Ads: Darkpost, Faceleads, Feed, Stories/Reels, Feed/Stories, Carrossel, Video Views, Lead Ad
+            - LinkedIn Ads: Sponsored Content, Sponsored Messaging, Lead Gen Forms, Dynamic Ads, Text Ads
+            - TikTok Ads: In-Feed Ads, TopView, Branded Hashtag Challenge, Branded Effects
+            - Microsoft Ads: Search, Audience Network
+            - Pinterest Ads: Static Pin, Video Pin, Carousel Pin, Shopping Pin, Idea Pin
+            - X Ads: Promoted Ads, Follower Ads, X Amplify, X Live
+            
+            USE APENAS os formatos listados acima para cada canal.
+            
             IMPORTANTE: Retorne APENAS o JSON, sem texto adicional antes ou depois.
         `;
         
@@ -581,6 +593,30 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
         
         try {
             const parsedData = JSON.parse(cleanedText);
+            
+            // Validar e corrigir formatos das campanhas
+            if (parsedData.months) {
+                Object.keys(parsedData.months).forEach(monthKey => {
+                    if (Array.isArray(parsedData.months[monthKey])) {
+                        parsedData.months[monthKey] = parsedData.months[monthKey].map((campaign: any) => {
+                            const canal = campaign.canal || 'Google Ads';
+                            let formato = campaign.formato || 'Search';
+                            
+                            // Validar e corrigir formato se necessário
+                            if (!validateChannelFormat(canal, formato)) {
+                                formato = getValidFormatForChannel(canal);
+                            }
+                            
+                            return {
+                                ...campaign,
+                                canal,
+                                formato
+                            };
+                        });
+                    }
+                });
+            }
+            
             return parsedData;
         } catch (parseError) {
             console.error("Error parsing AI response:", parseError);
@@ -785,6 +821,18 @@ export const exportGroupedKeywordsAsTXT = (groupedKeywords: Record<string, Keywo
     
     downloadFile(`${campaignName}-keywords.txt`, txtContent, 'text/plain');
 };
+
+// Função para validar se o formato é permitido para o canal
+function validateChannelFormat(canal: string, formato: string): boolean {
+    const channelFormats = CHANNEL_FORMATS[canal as keyof typeof CHANNEL_FORMATS];
+    return channelFormats ? channelFormats.includes(formato) : false;
+}
+
+// Função para obter um formato válido para o canal
+function getValidFormatForChannel(canal: string): string {
+    const channelFormats = CHANNEL_FORMATS[canal as keyof typeof CHANNEL_FORMATS];
+    return channelFormats && channelFormats.length > 0 ? channelFormats[0] : 'Search';
+}
 
 export const calculatePlanSummary = (planData: PlanData) => {
     const allCampaigns: Campaign[] = [];
