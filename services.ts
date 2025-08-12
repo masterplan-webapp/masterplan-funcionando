@@ -47,9 +47,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 let ai: GoogleGenerativeAI | null = null;
 const getAiClient = (): GoogleGenerativeAI => {
     if (!ai) {
-        const apiKey = process.env.GEMINI_API_KEY;
+        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
         if (!apiKey) {
-            console.warn('GEMINI_API_KEY not found in environment variables');
+            console.warn('VITE_GEMINI_API_KEY not found in environment variables');
             throw new Error('Gemini API key is not configured');
         }
         try {
