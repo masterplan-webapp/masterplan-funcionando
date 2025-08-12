@@ -177,7 +177,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             // Use production URL if not on localhost
             const redirectUrl = window.location.hostname === 'localhost' 
                 ? window.location.origin 
-                : 'https://masterplan-505gxfqme-fabio-zacaris-projects-2521886a.vercel.app';
+                : 'https://masterplan-7l55ap4lh-fabio-zacaris-projects-2521886a.vercel.app';
             
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
