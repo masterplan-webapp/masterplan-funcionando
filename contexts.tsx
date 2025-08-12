@@ -213,23 +213,59 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const signUpWithEmail = async (email: string, password: string, displayName: string) => {
         try {
             setAuthError(null);
-            const { error } = await supabase.auth.signUp({
+            setLoading(true);
+            
+            const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     data: {
                         full_name: displayName, // This goes to raw_user_meta_data
-                    }
+                    },
+                    emailRedirectTo: window.location.origin
                 }
             });
+            
             if (error) {
-                setAuthError(error.message);
+                // Tratar erros específicos do Supabase
+                let errorMessage = error.message;
+                
+                if (error.message.includes('Email rate limit exceeded')) {
+                    errorMessage = 'Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.';
+                } else if (error.message.includes('User already registered')) {
+                    errorMessage = 'Este email já está cadastrado. Tente fazer login ou use outro email.';
+                } else if (error.message.includes('Invalid email')) {
+                    errorMessage = 'Email inválido. Verifique o formato do email.';
+                } else if (error.message.includes('Password should be at least')) {
+                    errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
+                } else if (error.message.includes('Signup is disabled')) {
+                    errorMessage = 'Cadastro temporariamente desabilitado. Tente novamente mais tarde.';
+                }
+                
+                setAuthError(errorMessage);
                 throw error;
             }
+            
+            // Check if email confirmation is required
+            if (data.user && !data.session) {
+                // Email confirmation required - this is normal for production
+                setAuthError('Conta criada com sucesso! Um email de confirmação foi enviado para ' + email + '. Verifique sua caixa de entrada e pasta de spam. Clique no link do email para ativar sua conta.');
+            } else if (data.session) {
+                // User logged in immediately (email confirmation disabled)
+                setAuthError('Conta criada e login realizado com sucesso!');
+            }
+            
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Erro no cadastro';
-            setAuthError(errorMessage);
+            
+            // Se não foi tratado acima, usar mensagem genérica
+            if (!authError) {
+                setAuthError('Erro ao criar conta. Verifique suas informações e tente novamente.');
+            }
+            
             throw error;
+        } finally {
+            setLoading(false);
         }
     };
 

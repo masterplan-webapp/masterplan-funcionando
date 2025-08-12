@@ -762,22 +762,36 @@ function AppLogic() {
 
     // Show auth error if present
     if (authError && !user) {
+        const isSuccessMessage = authError.includes('Conta criada com sucesso');
+        
         return (
             <div className="h-screen w-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-                    <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+                    {isSuccessMessage ? (
+                        <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mb-4">
+                            <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                    ) : (
+                        <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+                    )}
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                        Erro de Autenticação
+                        {isSuccessMessage ? 'Conta Criada!' : 'Erro de Autenticação'}
                     </h1>
                     <p className="text-gray-600 dark:text-gray-300 mb-6">
                         {authError}
                     </p>
                     <button
                         onClick={() => window.location.reload()}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                            isSuccessMessage 
+                                ? 'bg-green-600 text-white hover:bg-green-700' 
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                     >
                         <RefreshCw size={16} />
-                        Tentar Novamente
+                        {isSuccessMessage ? 'Voltar ao Login' : 'Tentar Novamente'}
                     </button>
                 </div>
             </div>

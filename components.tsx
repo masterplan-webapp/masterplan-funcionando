@@ -607,28 +607,42 @@ export const LoginPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Login form submitted', { email, password: '***', isSignUp });
+        
+        if (isSubmitting || loading) return; // Prevent double submission
+        
         setError('');
+        setIsSubmitting(true);
+        
+        // Validation checks
+        if (!email.trim() || !password.trim()) {
+            setError('Email e senha são obrigatórios.');
+            setIsSubmitting(false);
+            return;
+        }
+        
+        if (isSignUp && !displayName.trim()) {
+            setError('Nome é obrigatório para criar conta.');
+            setIsSubmitting(false);
+            return;
+        }
+        
         try {
             if (isSignUp) {
-                if (!displayName) {
-                    setError('Display name is required for sign up.');
-                    return;
-                }
-                console.log('Attempting sign up...');
-                await signUpWithEmail(email, password, displayName);
-                console.log('Sign up successful');
+                await signUpWithEmail(email.trim(), password, displayName.trim());
+                // Success message for sign up
+                setError('Conta criada com sucesso! Verifique seu email se necessário.');
             } else {
-                console.log('Attempting sign in...');
-                await signInWithEmail(email, password);
-                console.log('Sign in successful');
+                await signInWithEmail(email.trim(), password);
             }
         } catch (err: any) {
-            console.error('Login error:', err);
-            setError(err.message || 'An error occurred.');
+            console.error('Auth error:', err);
+            setError(err.message || 'Ocorreu um erro. Tente novamente.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -643,22 +657,45 @@ export const LoginPage: React.FC = () => {
                     {isSignUp && (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('Nome')}</label>
-                            <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} required className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                            <input 
+                                type="text" 
+                                value={displayName} 
+                                onChange={e => setDisplayName(e.target.value)}
+                                placeholder="Seu nome completo"
+                                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                         </div>
                     )}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                        <input 
+                            type="email" 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)}
+                            placeholder="seu@email.com"
+                            className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('Password')}</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                        <input 
+                            type="password" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)}
+                            placeholder="Sua senha"
+                            className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                     </div>
                     
                     {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-                    <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors disabled:opacity-70">
-                        {loading ? <LoaderIcon className="animate-spin" /> : (isSignUp ? t('sign_up') : t('sign_in'))}
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting || loading}
+                        onClick={() => console.log('🔥 Button clicked!', { isSubmitting, loading, isSignUp })}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors disabled:opacity-70"
+                    >
+                        {(isSubmitting || loading) ? <LoaderIcon className="animate-spin" /> : (isSignUp ? t('sign_up') : t('sign_in'))}
                     </button>
                 </form>
 
