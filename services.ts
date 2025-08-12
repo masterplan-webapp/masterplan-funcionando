@@ -10,6 +10,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import { CHANNEL_FORMATS } from './constants';
 
+// Extend ImportMeta interface to include env
+declare global {
+  interface ImportMeta {
+    env: Record<string, string>;
+  }
+}
+
 // Configuração da API do Google AI
 const API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY || '';
 
@@ -539,10 +546,51 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
         
         const langInstruction = language === 'pt-BR' ? 'Responda em Português.' : 'Respond in English.';
         
+        // Extrair informações do prompt do usuário
+        const promptLower = prompt.toLowerCase();
+        let numberOfMonths = 3; // padrão
+        let totalBudget = 20000; // padrão
+        
+        // Detectar número de meses no prompt
+        const monthsMatch = promptLower.match(/(\d+)\s*mes(?:es)?/);
+        if (monthsMatch) {
+            numberOfMonths = parseInt(monthsMatch[1]);
+        }
+        
+        // Detectar investimento total no prompt
+        const budgetMatch = prompt.match(/(?:investimento|orçamento|budget).*?(?:total|de)?.*?(?:r\$|rs)?\s*([\d.,]+)/i);
+        if (budgetMatch) {
+            const budgetStr = budgetMatch[1].replace(/[.,]/g, match => match === ',' ? '.' : '');
+            totalBudget = parseFloat(budgetStr);
+        }
+        
+        // Gerar nomes dos meses a partir do mês atual
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        const monthNames = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        
+        const monthKeys = [];
+        for (let i = 0; i < numberOfMonths; i++) {
+            const monthIndex = (currentMonth + i) % 12;
+            const year = currentMonth + i >= 12 ? currentYear + 1 : currentYear;
+            monthKeys.push(`${year}-${monthNames[monthIndex]}`);
+        }
+        
         const structuredPrompt = `
             ${langInstruction}
             
             Crie um plano de mídia detalhado baseado na seguinte solicitação: "${prompt}"
+            
+            INSTRUÇÕES CRÍTICAS PARA DISTRIBUIÇÃO DO ORÇAMENTO:
+            - O investimento total deve ser EXATAMENTE R$ ${totalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            - Distribua este valor entre TODOS os ${numberOfMonths} meses: ${monthKeys.join(', ')}
+            - NUNCA deixe meses com orçamento zero
+            - A soma de todos os budgets das campanhas deve ser igual ao totalInvestment
+            - Distribua de forma estratégica: meses iniciais podem ter mais investimento para awareness, meses finais para conversão
             
             Retorne APENAS um JSON válido com a seguinte estrutura:
             {
@@ -550,16 +598,16 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
                 "objective": "Objetivo principal",
                 "targetAudience": "Público-alvo",
                 "location": "Localização geográfica",
-                "totalInvestment": 20000,
+                "totalInvestment": ${totalBudget},
                 "aiImagePrompt": "Prompt para geração de imagens",
                 "months": {
-                    "2024-Janeiro": [
+                    ${monthKeys.map(month => `"${month}": [
                         {
-                            "nome": "Nome da campanha",
+                            "nome": "Nome da campanha para ${month}",
                             "tipoCampanha": "Awareness",
                             "canal": "Google Ads",
                             "formato": "Search",
-                            "budget": 5000,
+                            "budget": ${Math.round(totalBudget / numberOfMonths / 2)},
                             "cpc": 1.20,
                             "cpm": 15.00,
                             "ctr": 2.00,
@@ -570,7 +618,7 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
                             "conversoes": 100,
                             "alcance": 50000
                         }
-                    ]
+                    ]`).join(',\n                    ')}
                 }
             }
             
@@ -592,11 +640,18 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
             - Conversão: CPC: R$ 3,00, CTR: 2,20%, Taxa Conversão: 8,00%, Connect Rate: 90%
             - Retargeting: CPC: R$ 2,80, CTR: 3,50%, Taxa Conversão: 10,00%, Connect Rate: 95%
             
+            ESTRATÉGIA DE DISTRIBUIÇÃO SUGERIDA:
+            - Meses 1-2: Foco em Awareness e Alcance (30-35% do orçamento total)
+            - Meses 3-6: Tráfego e Engajamento (40-45% do orçamento total)
+            - Meses 7+: Conversão e Retargeting (25-30% do orçamento total)
+            
             IMPORTANTE:
             1. USE APENAS os formatos listados acima para cada canal
             2. SEMPRE inclua métricas realistas baseadas no tipo de campanha
             3. Calcule impressões, cliques, conversões e alcance baseados no budget e nas métricas
-            4. Retorne APENAS o JSON, sem texto adicional antes ou depois
+            4. GARANTA que a soma de todos os budgets seja igual ao totalInvestment
+            5. NUNCA deixe meses sem campanhas ou com orçamento zero
+            6. Retorne APENAS o JSON, sem texto adicional antes ou depois
         `;
         
         const result = await model.generateContent(structuredPrompt);
