@@ -788,10 +788,28 @@ export const exportGroupedKeywordsAsTXT = (groupedKeywords: Record<string, Keywo
 
 export const calculatePlanSummary = (planData: PlanData) => {
     const allCampaigns: Campaign[] = [];
+    const monthlySummary: Record<string, any> = {};
     
-    Object.values(planData.months || {}).forEach(monthData => {
+    // Calcular dados por mês
+    Object.entries(planData.months || {}).forEach(([monthKey, monthData]) => {
         if (monthData && Array.isArray(monthData)) {
             allCampaigns.push(...monthData);
+            
+            const monthBudget = monthData.reduce((sum, campaign) => sum + (Number(campaign.budget) || 0), 0);
+            const monthImpressions = monthData.reduce((sum, campaign) => sum + (Number(campaign.impressoes) || 0), 0);
+            const monthClicks = monthData.reduce((sum, campaign) => sum + (Number(campaign.cliques) || 0), 0);
+            const monthConversions = monthData.reduce((sum, campaign) => sum + (Number(campaign.conversoes) || 0), 0);
+            
+            monthlySummary[monthKey] = {
+                budget: monthBudget,
+                impressoes: monthImpressions,
+                cliques: monthClicks,
+                conversoes: monthConversions,
+                ctr: monthImpressions > 0 ? (monthClicks / monthImpressions) * 100 : 0,
+                cpc: monthClicks > 0 ? monthBudget / monthClicks : 0,
+                cpa: monthConversions > 0 ? monthBudget / monthConversions : 0,
+                taxaConversao: monthClicks > 0 ? (monthConversions / monthClicks) * 100 : 0
+            };
         }
     });
     
@@ -808,7 +826,9 @@ export const calculatePlanSummary = (planData: PlanData) => {
             conversoes: totalConversions,
             ctr: totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0,
             cpc: totalClicks > 0 ? totalBudget / totalClicks : 0,
-            cpa: totalConversions > 0 ? totalBudget / totalConversions : 0
-        }
+            cpa: totalConversions > 0 ? totalBudget / totalConversions : 0,
+            taxaConversao: totalClicks > 0 ? (totalConversions / totalClicks) * 100 : 0
+        },
+        monthlySummary
     };
 };
