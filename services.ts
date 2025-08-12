@@ -560,6 +560,11 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
                             "canal": "Google Ads",
                             "formato": "Search",
                             "budget": 5000,
+                            "cpc": 1.20,
+                            "cpm": 15.00,
+                            "ctr": 2.00,
+                            "taxaConversao": 0.50,
+                            "connectRate": 80,
                             "impressoes": 100000,
                             "cliques": 2000,
                             "conversoes": 100,
@@ -578,9 +583,20 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
             - Pinterest Ads: Static Pin, Video Pin, Carousel Pin, Shopping Pin, Idea Pin
             - X Ads: Promoted Ads, Follower Ads, X Amplify, X Live
             
-            USE APENAS os formatos listados acima para cada canal.
+            MÉTRICAS PADRÃO POR TIPO DE CAMPANHA (use como base):
+            - Awareness: CPM: R$ 15,00, CTR: 0,80%, Taxa Conversão: 0,10%, Connect Rate: 50%
+            - Alcance: CPM: R$ 12,00, CTR: 0,90%, Taxa Conversão: 0,20%, Connect Rate: 55%
+            - Tráfego: CPC: R$ 1,20, CTR: 2,00%, Taxa Conversão: 0,50%, Connect Rate: 80%
+            - Engajamento: CPC: R$ 1,40, CTR: 2,50%, Taxa Conversão: 1,00%, Connect Rate: 75%
+            - Geração de Leads: CPC: R$ 2,50, CTR: 1,50%, Taxa Conversão: 5,00%, Connect Rate: 85%
+            - Conversão: CPC: R$ 3,00, CTR: 2,20%, Taxa Conversão: 8,00%, Connect Rate: 90%
+            - Retargeting: CPC: R$ 2,80, CTR: 3,50%, Taxa Conversão: 10,00%, Connect Rate: 95%
             
-            IMPORTANTE: Retorne APENAS o JSON, sem texto adicional antes ou depois.
+            IMPORTANTE:
+            1. USE APENAS os formatos listados acima para cada canal
+            2. SEMPRE inclua métricas realistas baseadas no tipo de campanha
+            3. Calcule impressões, cliques, conversões e alcance baseados no budget e nas métricas
+            4. Retorne APENAS o JSON, sem texto adicional antes ou depois
         `;
         
         const result = await model.generateContent(structuredPrompt);
