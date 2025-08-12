@@ -3,6 +3,7 @@ import { supabase } from './services';
 import { TRANSLATIONS } from './constants';
 import { Database, LanguageCode, Translations, LanguageContextType, Theme, ThemeContextType, AuthContextType, User } from './types';
 import { AuthChangeEvent, Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { getAuthRedirectUrl } from './config';
 
 // --- Language Context ---
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -174,15 +175,13 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const signInWithGoogle = async () => {
         try {
             setAuthError(null);
-            // Use production URL if not on localhost
-            const redirectUrl = window.location.hostname === 'localhost' 
-                ? window.location.origin 
-                : 'https://masterplan-7l55ap4lh-fabio-zacaris-projects-2521886a.vercel.app';
+            // Use centralized configuration for redirect URL
+            const redirectUrl = getAuthRedirectUrl();
             
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                  options: {
-                    redirectTo: redirectUrl, // Redirect back to the app after Google sign-in
+                    redirectTo: redirectUrl, // Redirect back to the correct domain
                 }
             });
             if (error) {
