@@ -11,11 +11,14 @@ import { createClient } from '@supabase/supabase-js';
 import { CHANNEL_FORMATS } from './constants';
 
 // Configuração da API do Google AI
-const API_KEY = 'AIzaSyBJhJGKJGKJGKJGKJGKJGKJGKJGKJGKJGK'; // Substitua pela sua chave real
+const API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY || '';
 
 let aiClient: GoogleGenerativeAI | null = null;
 
 const getAiClient = (): GoogleGenerativeAI => {
+    if (!API_KEY) {
+        throw new Error('Google AI API key not configured. Please set VITE_GOOGLE_AI_API_KEY environment variable.');
+    }
     if (!aiClient) {
         aiClient = new GoogleGenerativeAI(API_KEY);
     }

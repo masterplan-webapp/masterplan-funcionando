@@ -1,14 +1,26 @@
-# Run and deploy your AI Studio app
+# MasterPlan AI - Marketing Campaign Planner
 
-This contains everything you need to run your app locally.
+This is an AI-powered marketing campaign planning application that helps create comprehensive marketing strategies.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   ```bash
+   npm install
+   ```
+
+2. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Get your Google AI API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - Set `VITE_GOOGLE_AI_API_KEY` in your `.env` file
+
 3. Run the app:
-   `npm run dev`
+   ```bash
+   npm run dev
+   ```
+
+## Environment Variables
+
+- `VITE_GOOGLE_AI_API_KEY`: Your Google AI (Gemini) API key for AI-powered features

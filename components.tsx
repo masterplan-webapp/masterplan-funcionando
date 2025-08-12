@@ -860,7 +860,7 @@ export const AIPlanCreationModal: React.FC<AIPlanCreationModalProps> = ({ isOpen
     const { t } = useLanguage();
     const [prompt, setPrompt] = useState(initialPrompt || '');
     
-    console.log("AIPlanCreationModal renderizado", { isOpen, isLoading, initialPrompt });
+
 
     useEffect(() => {
         if (initialPrompt) {
@@ -1171,7 +1171,12 @@ export const PlanSelectorPage: React.FC<PlanSelectorPageProps> = ({ plans, onSel
             <PlanCreationChoiceModal
                 isOpen={isChoiceModalOpen}
                 onClose={() => setIsChoiceModalOpen(false)}
-                onRequestAI={() => createPlan(onRequestAI)}
+                onRequestAI={() => {
+                    setIsChoiceModalOpen(false);
+                    setTimeout(() => {
+                        onRequestAI();
+                    }, 100);
+                }}
                 onSelectBlank={() => createPlan(onSelectBlank)}
                 onSelectTemplate={() => createPlan(onSelectTemplate)}
             />
@@ -1244,7 +1249,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ planData, onNaviga
                 - Target Audience: ${planData.targetAudience}
                 - Total Investment: ${formatCurrency(summary.budget)}
                 - Period: ${Object.keys(planData.months).join(', ')}
-                - Investment distribution by channel: ${JSON.stringify(summary.channelBudgets)}
+                - Investment distribution by channel: ${JSON.stringify(allCampaigns.reduce((acc, campaign) => {
+                    const channel = campaign.canal || 'Unknown';
+                    acc[channel] = (acc[channel] || 0) + (Number(campaign.budget) || 0);
+                    return acc;
+                }, {} as Record<string, number>))}
                 - Key Metrics: Clicks: ${summary.cliques}, Conversions: ${summary.conversoes}, CTR: ${formatPercentage(summary.ctr)}, CPA: ${formatCurrency(summary.cpa)}
             `;
             const analysis = await callGeminiAPI(prompt);

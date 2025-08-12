@@ -490,12 +490,9 @@ function AppLogic() {
     
     const handlePlanUpdate = useCallback(async (planToSave: PlanData) => {
         if(!user) return;
-        const saved = await savePlan(planToSave);
-        if(saved) {
-            const savedPlanData = saved as unknown as PlanData;
-            setActivePlan(savedPlanData);
-            setAllPlans(prev => prev.map(p => p.id === savedPlanData.id ? savedPlanData : p));
-        }
+        await savePlan(planToSave);
+        setActivePlan(planToSave);
+        setAllPlans(prev => prev.map(p => p.id === planToSave.id ? planToSave : p));
     }, [user]);
 
     const handleSavePlanDetails = useCallback(async (details: Partial<Omit<PlanData, 'id' | 'months' | 'creatives' | 'customFormats' | 'utmLinks' | 'adGroups'>>) => {
@@ -617,12 +614,9 @@ function AppLogic() {
                 }
             }
 
-            const savedPlan = await savePlan(newPlan);
-            if(savedPlan) {
-                const newPlanData = savedPlan as unknown as PlanData;
-                setAllPlans(prev => [newPlanData, ...prev]);
-                selectActivePlan(newPlanData);
-            }
+            await savePlan(newPlan);
+            setAllPlans(prev => [newPlan, ...prev]);
+            selectActivePlan(newPlan);
         } catch (error) {
             console.error("Error creating AI plan:", error);
             const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao criar o plano com IA';
@@ -714,12 +708,9 @@ function AppLogic() {
             user_id: user.id!,
             campaignName: `${planToDuplicate.campaignName} ${t('Copy')}`
         };
-        const saved = await savePlan(duplicatePlan);
-        if (saved) {
-            const newPlan = saved as unknown as PlanData;
-            setAllPlans(prev => [newPlan, ...prev]);
-            selectActivePlan(newPlan);
-        }
+        await savePlan(duplicatePlan);
+        setAllPlans(prev => [duplicatePlan, ...prev]);
+        selectActivePlan(duplicatePlan);
         setPlanDetailsModalOpen(false);
     }, [user, t, selectActivePlan]);
 
@@ -938,6 +929,10 @@ function AppLogic() {
                     try {
                         await handleGenerateAIPlan(prompt);
                         setIsAIPlanModalOpen(false);
+                        // Show success notification
+                        setTimeout(() => {
+                            alert(t('Plano criado com sucesso! Você está visualizando o overview do seu novo plano.'));
+                        }, 500);
                     } catch (e) {
                         // Error is already alerted by the handler
                     }

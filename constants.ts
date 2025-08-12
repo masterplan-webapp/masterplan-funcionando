@@ -279,7 +279,8 @@ export const TRANSLATIONS: Translations = {
         "create_account": "Crie sua conta",
         "already_have_account": "Já tem uma conta?",
         "dont_have_account": "Não tem uma conta?",
-        "Password": "Senha"
+        "Password": "Senha",
+        "Plano criado com sucesso! Você está visualizando o overview do seu novo plano.": "Plano criado com sucesso! Você está visualizando o overview do seu novo plano."
     },
     'en-US': {
         save: 'Save',
@@ -527,6 +528,7 @@ export const TRANSLATIONS: Translations = {
         "create_account": "Create your account",
         "already_have_account": "Already have an account?",
         "dont_have_account": "Don't have an account?",
-        "Password": "Password"
+        "Password": "Password",
+        "Plano criado com sucesso! Você está visualizando o overview do seu novo plano.": "Plan created successfully! You are viewing the overview of your new plan."
     }
 };
