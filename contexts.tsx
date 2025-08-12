@@ -174,10 +174,15 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     const signInWithGoogle = async () => {
         try {
             setAuthError(null);
+            // Use production URL if not on localhost
+            const redirectUrl = window.location.hostname === 'localhost' 
+                ? window.location.origin 
+                : 'https://masterplan-505gxfqme-fabio-zacaris-projects-2521886a.vercel.app';
+            
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                  options: {
-                    redirectTo: window.location.origin, // Redirect back to the app after Google sign-in
+                    redirectTo: redirectUrl, // Redirect back to the app after Google sign-in
                 }
             });
             if (error) {
