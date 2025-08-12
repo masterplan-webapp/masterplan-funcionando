@@ -583,75 +583,84 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
         const structuredPrompt = `
             ${langInstruction}
             
-            Crie um plano de mídia detalhado baseado na seguinte solicitação: "${prompt}"
+            VOCÊ É UM ESPECIALISTA SÊNIOR EM MÍDIA PAGA com 15+ anos de experiência em campanhas digitais.
+            Você está sempre atualizado com as melhores práticas do mercado e tem expertise em:
+            - Google Ads, Meta Ads, LinkedIn Ads, TikTok Ads
+            - Estratégias de funil completo (awareness → conversão)
+            - Otimização de orçamento e ROI
+            - Métricas e KPIs de performance
             
-            INSTRUÇÕES CRÍTICAS PARA DISTRIBUIÇÃO DO ORÇAMENTO:
-            - O investimento total deve ser EXATAMENTE R$ ${totalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            - Distribua este valor entre TODOS os ${numberOfMonths} meses: ${monthKeys.join(', ')}
-            - NUNCA deixe meses com orçamento zero
-            - A soma de todos os budgets das campanhas deve ser igual ao totalInvestment
-            - Distribua de forma estratégica: meses iniciais podem ter mais investimento para awareness, meses finais para conversão
+            SOLICITAÇÃO DO CLIENTE: "${prompt}"
             
-            Retorne APENAS um JSON válido com a seguinte estrutura:
+            ⚠️ REGRAS OBRIGATÓRIAS DE ORÇAMENTO (NÃO NEGOCIÁVEIS):
+            1. O investimento total DEVE SER EXATAMENTE: R$ ${totalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            2. Distribua entre EXATAMENTE ${numberOfMonths} meses: ${monthKeys.join(', ')}
+            3. SOMA TOTAL dos budgets = ${totalBudget} (nem mais, nem menos)
+            4. TODOS os meses devem ter campanhas (ZERO meses vazios)
+            5. Antes de finalizar, CONFIRA: soma dos budgets = totalInvestment
+            
+            ESTRUTURA JSON OBRIGATÓRIA (retorne APENAS isto):
             {
-                "campaignName": "Nome da campanha",
-                "objective": "Objetivo principal",
-                "targetAudience": "Público-alvo",
-                "location": "Localização geográfica",
+                "campaignName": "Nome estratégico da campanha",
+                "objective": "Objetivo principal baseado na solicitação",
+                "targetAudience": "Público-alvo detalhado e segmentado",
+                "location": "Localização geográfica específica",
                 "totalInvestment": ${totalBudget},
-                "aiImagePrompt": "Prompt para geração de imagens",
+                "aiImagePrompt": "Prompt criativo para imagens",
                 "months": {
-                    ${monthKeys.map(month => `"${month}": [
+                    ${monthKeys.map((month, index) => {
+                        const budgetPerMonth = Math.round(totalBudget / numberOfMonths);
+                        const adjustment = index === numberOfMonths - 1 ? totalBudget - (budgetPerMonth * (numberOfMonths - 1)) : budgetPerMonth;
+                        return `"${month}": [
                         {
-                            "nome": "Nome da campanha para ${month}",
-                            "tipoCampanha": "Awareness",
+                            "nome": "Campanha estratégica ${month}",
+                            "tipoCampanha": "${index < 2 ? 'Awareness' : index < 4 ? 'Tráfego' : 'Conversão'}",
                             "canal": "Google Ads",
                             "formato": "Search",
-                            "budget": ${Math.round(totalBudget / numberOfMonths / 2)},
-                            "cpc": 1.20,
+                            "budget": ${adjustment},
+                            "cpc": 1.50,
                             "cpm": 15.00,
-                            "ctr": 2.00,
-                            "taxaConversao": 0.50,
-                            "connectRate": 80,
-                            "impressoes": 100000,
-                            "cliques": 2000,
-                            "conversoes": 100,
-                            "alcance": 50000
+                            "ctr": 2.20,
+                            "taxaConversao": 1.50,
+                            "connectRate": 75,
+                            "impressoes": 80000,
+                            "cliques": 1760,
+                            "conversoes": 26,
+                            "alcance": 40000
                         }
-                    ]`).join(',\n                    ')}
+                    ]`;
+                    }).join(',\n                    ')}
                 }
             }
             
-            FORMATOS PERMITIDOS POR CANAL:
-            - Google Ads: Search, PMax, Display, YouTube, Demand Gen
-            - Meta Ads: Darkpost, Faceleads, Feed, Stories/Reels, Feed/Stories, Carrossel, Video Views, Lead Ad
-            - LinkedIn Ads: Sponsored Content, Sponsored Messaging, Lead Gen Forms, Dynamic Ads, Text Ads
-            - TikTok Ads: In-Feed Ads, TopView, Branded Hashtag Challenge, Branded Effects
-            - Microsoft Ads: Search, Audience Network
-            - Pinterest Ads: Static Pin, Video Pin, Carousel Pin, Shopping Pin, Idea Pin
-            - X Ads: Promoted Ads, Follower Ads, X Amplify, X Live
+            📊 MÉTRICAS DE MERCADO ATUALIZADAS (2024):
+            - Awareness: CPM R$ 12-18, CTR 0,8-1,2%, Conv. 0,1-0,3%, Connect 45-60%
+            - Alcance: CPM R$ 10-15, CTR 0,9-1,5%, Conv. 0,2-0,5%, Connect 50-65%
+            - Tráfego: CPC R$ 1,00-2,00, CTR 1,8-3,0%, Conv. 0,5-1,5%, Connect 70-85%
+            - Engajamento: CPC R$ 1,20-2,50, CTR 2,0-4,0%, Conv. 0,8-2,0%, Connect 65-80%
+            - Leads: CPC R$ 2,00-4,00, CTR 1,2-2,5%, Conv. 3,0-8,0%, Connect 80-90%
+            - Conversão: CPC R$ 2,50-5,00, CTR 1,8-3,5%, Conv. 5,0-12%, Connect 85-95%
+            - Retargeting: CPC R$ 2,00-4,50, CTR 3,0-6,0%, Conv. 8,0-15%, Connect 90-98%
             
-            MÉTRICAS PADRÃO POR TIPO DE CAMPANHA (use como base):
-            - Awareness: CPM: R$ 15,00, CTR: 0,80%, Taxa Conversão: 0,10%, Connect Rate: 50%
-            - Alcance: CPM: R$ 12,00, CTR: 0,90%, Taxa Conversão: 0,20%, Connect Rate: 55%
-            - Tráfego: CPC: R$ 1,20, CTR: 2,00%, Taxa Conversão: 0,50%, Connect Rate: 80%
-            - Engajamento: CPC: R$ 1,40, CTR: 2,50%, Taxa Conversão: 1,00%, Connect Rate: 75%
-            - Geração de Leads: CPC: R$ 2,50, CTR: 1,50%, Taxa Conversão: 5,00%, Connect Rate: 85%
-            - Conversão: CPC: R$ 3,00, CTR: 2,20%, Taxa Conversão: 8,00%, Connect Rate: 90%
-            - Retargeting: CPC: R$ 2,80, CTR: 3,50%, Taxa Conversão: 10,00%, Connect Rate: 95%
+            🎯 ESTRATÉGIA PROFISSIONAL DE DISTRIBUIÇÃO:
+            - Meses 1-2: Awareness/Alcance (30-35% do budget) - Construir presença
+            - Meses 3-4: Tráfego/Engajamento (35-40% do budget) - Gerar interesse
+            - Meses 5+: Conversão/Retargeting (25-35% do budget) - Maximizar ROI
             
-            ESTRATÉGIA DE DISTRIBUIÇÃO SUGERIDA:
-            - Meses 1-2: Foco em Awareness e Alcance (30-35% do orçamento total)
-            - Meses 3-6: Tráfego e Engajamento (40-45% do orçamento total)
-            - Meses 7+: Conversão e Retargeting (25-30% do orçamento total)
+            📱 CANAIS E FORMATOS PERMITIDOS:
+            • Google Ads: Search, PMax, Display, YouTube, Demand Gen
+            • Meta Ads: Feed, Stories/Reels, Carrossel, Video Views, Lead Ad, Darkpost
+            • LinkedIn Ads: Sponsored Content, Lead Gen Forms, Sponsored Messaging
+            • TikTok Ads: In-Feed Ads, TopView, Branded Hashtag Challenge
             
-            IMPORTANTE:
-            1. USE APENAS os formatos listados acima para cada canal
-            2. SEMPRE inclua métricas realistas baseadas no tipo de campanha
-            3. Calcule impressões, cliques, conversões e alcance baseados no budget e nas métricas
-            4. GARANTA que a soma de todos os budgets seja igual ao totalInvestment
-            5. NUNCA deixe meses sem campanhas ou com orçamento zero
-            6. Retorne APENAS o JSON, sem texto adicional antes ou depois
+            ✅ CHECKLIST FINAL OBRIGATÓRIO:
+            1. ✓ Soma total dos budgets = R$ ${totalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            2. ✓ Todos os ${numberOfMonths} meses preenchidos
+            3. ✓ Métricas realistas baseadas no mercado 2024
+            4. ✓ Estratégia de funil progressiva
+            5. ✓ JSON válido sem texto extra
+            
+            RETORNE APENAS O JSON. NADA MAIS.
         `;
         
         const result = await model.generateContent(structuredPrompt);
