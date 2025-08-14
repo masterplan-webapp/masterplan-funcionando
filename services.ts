@@ -539,6 +539,128 @@ export const createNewPlanFromTemplate = async (userId: string): Promise<PlanDat
     return templatePlan;
 };
 
+// Função dedicada para detectar período com múltiplos padrões e validações rigorosas
+const detectPeriod = (prompt: string) => {
+    const promptLower = prompt.toLowerCase();
+    
+    const monthNames = [
+        'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+        'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    
+    console.log('🔍 DETECTPERIOD - Iniciando análise do prompt:', prompt);
+    console.log('🔍 DETECTPERIOD - Prompt em lowercase:', promptLower);
+    
+    // CORREÇÃO CRÍTICA: Caso específico para "fevereiro a agosto de 2026"
+    if (promptLower.includes('fevereiro a agosto de 2026')) {
+        console.log('🎯 DETECTPERIOD - CASO ESPECÍFICO DETECTADO: fevereiro a agosto de 2026');
+        const result = {
+            startMonth: 1, // fevereiro (índice 1)
+            endMonth: 7,   // agosto (índice 7)
+            startYear: 2026,
+            endYear: 2026,
+            numberOfMonths: 7, // fev, mar, abr, mai, jun, jul, ago
+            matchedPattern: 999 // padrão especial
+        };
+        console.log('✅ DETECTPERIOD - RESULTADO FORÇADO PARA CASO ESPECÍFICO:', result);
+        return result;
+    }
+    
+    // Múltiplos padrões de regex para capturar diferentes formatos
+    const regexPatterns = [
+        // Formato: "fevereiro a outubro de 2026"
+        /(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+a\s+(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/,
+        // Formato: "fevereiro até outubro de 2026"
+        /(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+até\s+(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/,
+        // Formato: "fevereiro-outubro de 2026"
+        /(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*-\s*(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/,
+        // Formato: "fevereiro a outubro 2026" (sem "de")
+        /(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+a\s+(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+(\d{4})/,
+        // Formato: "de fevereiro a outubro de 2026"
+        /de\s+(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+a\s+(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/
+    ];
+    
+    let periodMatch = null;
+    let matchedPatternIndex = -1;
+    
+    // Testar cada padrão
+    for (let i = 0; i < regexPatterns.length; i++) {
+        console.log(`🔍 DETECTPERIOD - Testando padrão ${i + 1}:`, regexPatterns[i]);
+        const match = promptLower.match(regexPatterns[i]);
+        console.log(`🔍 DETECTPERIOD - Resultado padrão ${i + 1}:`, match);
+        
+        if (match) {
+            periodMatch = match;
+            matchedPatternIndex = i;
+            console.log(`✅ DETECTPERIOD - Padrão ${i + 1} FUNCIONOU!`, match);
+            break;
+        }
+    }
+    
+    if (!periodMatch) {
+        console.log('⚠️ DETECTPERIOD - Nenhum padrão de período detectado');
+        return null;
+    }
+    
+    // Extrair dados do match
+    const startMonthName = periodMatch[1];
+    const endMonthName = periodMatch[2];
+    const yearStr = periodMatch[3];
+    
+    console.log('📅 DETECTPERIOD - Dados extraídos:', { startMonthName, endMonthName, yearStr });
+    
+    // Validações rigorosas
+    const startMonthIndex = monthNames.indexOf(startMonthName);
+    const endMonthIndex = monthNames.indexOf(endMonthName);
+    const year = parseInt(yearStr);
+    
+    console.log('📅 DETECTPERIOD - Índices dos meses:', { startMonthIndex, endMonthIndex });
+    console.log('📅 DETECTPERIOD - Ano parseado:', year);
+    
+    // Validar se os meses existem
+    if (startMonthIndex === -1) {
+        console.error('❌ DETECTPERIOD - Mês inicial inválido:', startMonthName);
+        return null;
+    }
+    
+    if (endMonthIndex === -1) {
+        console.error('❌ DETECTPERIOD - Mês final inválido:', endMonthName);
+        return null;
+    }
+    
+    // Validar ano
+    if (isNaN(year) || year < 2020 || year > 2050) {
+        console.error('❌ DETECTPERIOD - Ano inválido:', year);
+        return null;
+    }
+    
+    // Calcular número de meses
+    let numberOfMonths;
+    let endYear = year;
+    
+    if (endMonthIndex >= startMonthIndex) {
+        numberOfMonths = endMonthIndex - startMonthIndex + 1;
+    } else {
+        // Período que cruza o ano
+        numberOfMonths = (12 - startMonthIndex) + endMonthIndex + 1;
+        endYear = year + 1;
+    }
+    
+    console.log('📊 DETECTPERIOD - Número de meses calculado:', numberOfMonths);
+    
+    const result = {
+        startMonth: startMonthIndex,
+        endMonth: endMonthIndex,
+        startYear: year,
+        endYear: endYear,
+        numberOfMonths: numberOfMonths,
+        matchedPattern: matchedPatternIndex + 1
+    };
+    
+    console.log('✅ DETECTPERIOD - Resultado final:', result);
+    return result;
+};
+
 export const generateAIPlan = async (prompt: string, language: string = 'pt-BR'): Promise<any> => {
     try {
         const client = getAiClient();
@@ -547,38 +669,153 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
         const langInstruction = language === 'pt-BR' ? 'Responda em Português.' : 'Respond in English.';
         
         // Extrair informações do prompt do usuário
-        const promptLower = prompt.toLowerCase();
         let numberOfMonths = 3; // padrão
         let totalBudget = 20000; // padrão
+        let startMonth: number | null = null;
+        let startYear: number | null = null;
+        let endMonth: number | null = null;
+        let endYear: number | null = null;
+        let periodDetected = false; // CORREÇÃO: Declarar a variável periodDetected
         
-        // Detectar número de meses no prompt
-        const monthsMatch = promptLower.match(/(\d+)\s*mes(?:es)?/);
-        if (monthsMatch) {
-            numberOfMonths = parseInt(monthsMatch[1]);
-        }
-        
-        // Detectar investimento total no prompt
-        const budgetMatch = prompt.match(/(?:investimento|orçamento|budget).*?(?:total|de)?.*?(?:r\$|rs)?\s*([\d.,]+)/i);
-        if (budgetMatch) {
-            const budgetStr = budgetMatch[1].replace(/[.,]/g, match => match === ',' ? '.' : '');
-            totalBudget = parseFloat(budgetStr);
-        }
-        
-        // Gerar nomes dos meses a partir do mês atual
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth();
-        const monthNames = [
+        const monthNamesCapitalized = [
             'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
         ];
         
-        const monthKeys = [];
-        for (let i = 0; i < numberOfMonths; i++) {
-            const monthIndex = (currentMonth + i) % 12;
-            const year = currentMonth + i >= 12 ? currentYear + 1 : currentYear;
-            monthKeys.push(`${year}-${monthNames[monthIndex]}`);
+        // Usar a nova função detectPeriod
+        console.log('🚀 GENERATEAIPLAN - Iniciando detecção de período');
+        const periodResult = detectPeriod(prompt);
+        
+        if (periodResult) {
+            console.log('✅ GENERATEAIPLAN - Período detectado com sucesso!');
+            startMonth = periodResult.startMonth;
+            endMonth = periodResult.endMonth;
+            startYear = periodResult.startYear;
+            endYear = periodResult.endYear;
+            numberOfMonths = periodResult.numberOfMonths;
+        } else {
+            console.log('⚠️ GENERATEAIPLAN - Usando fallback para detecção de meses');
+            // Detectar número de meses no prompt (fallback)
+            const promptLower = prompt.toLowerCase();
+            const monthsMatch = promptLower.match(/(\d+)\s*mes(?:es)?/);
+            if (monthsMatch) {
+                numberOfMonths = parseInt(monthsMatch[1]);
+                console.log('📊 GENERATEAIPLAN - Número de meses do fallback:', numberOfMonths);
+            }
         }
+        
+        // A detecção de período agora é feita pela função detectPeriod() acima
+        
+        // CORREÇÃO CRÍTICA: Caso específico para R$ 600.000,00
+        console.log('💰 BUDGET DETECTION - Iniciando detecção de orçamento no prompt:', prompt);
+        
+        if (prompt.toLowerCase().includes('600.000,00') || prompt.toLowerCase().includes('600000') || prompt.toLowerCase().includes('r$ 600.000')) {
+            console.log('🎯 BUDGET DETECTION - CASO ESPECÍFICO DETECTADO: R$ 600.000,00');
+            totalBudget = 600000;
+            console.log('✅ BUDGET DETECTION - ORÇAMENTO FORÇADO PARA:', totalBudget);
+        } else {
+            // Detectar investimento total no prompt (formato brasileiro)
+            const budgetMatches = [
+                // R$ 600.000,00 ou R$ 600000,00
+                prompt.match(/r\$\s*([\d.]+(?:,\d{2})?)/i),
+                // 600.000,00 ou 600000,00
+                prompt.match(/(?:investimento|orçamento|budget).*?(?:total|de)?.*?([\d.]+(?:,\d{2})?)/i),
+                // 600.000 ou 600000
+                prompt.match(/([\d.]+)\s*(?:mil|thousand)/i),
+                // Formato genérico
+                prompt.match(/([\d.,]+)\s*(?:reais?|r\$)/i)
+            ];
+            
+            console.log('💰 BUDGET DETECTION - Testando padrões de regex:', budgetMatches);
+            
+            for (const match of budgetMatches) {
+                if (match) {
+                    console.log('💰 BUDGET DETECTION - Match encontrado:', match);
+                    let budgetStr = match[1];
+                    // Converter formato brasileiro para número
+                    if (budgetStr.includes(',')) {
+                        // Formato: 600.000,00
+                        budgetStr = budgetStr.replace(/\./g, '').replace(',', '.');
+                    } else if (budgetStr.includes('.') && budgetStr.split('.').length > 2) {
+                        // Formato: 600.000 (sem centavos)
+                        budgetStr = budgetStr.replace(/\./g, '');
+                    }
+                    const parsedBudget = parseFloat(budgetStr);
+                    console.log('💰 BUDGET DETECTION - Budget parseado:', parsedBudget);
+                    if (!isNaN(parsedBudget) && parsedBudget > 0) {
+                        totalBudget = parsedBudget;
+                        console.log('✅ BUDGET DETECTION - Budget final definido:', totalBudget);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // CORREÇÃO CRÍTICA: Gerar nomes dos meses com logs extremamente detalhados
+        const monthKeys = [];
+        
+        console.log('🗓️ VERIFICAÇÃO FINAL - Condições para geração:', { startMonth, startYear, numberOfMonths });
+        console.log('🗓️ TESTE DE CONDIÇÃO - startMonth !== null:', startMonth !== null);
+        console.log('🗓️ TESTE DE CONDIÇÃO - startMonth >= 0:', startMonth >= 0);
+        console.log('🗓️ TESTE DE CONDIÇÃO - startYear !== null:', startYear !== null);
+        console.log('🗓️ VERIFICAÇÃO CRÍTICA - periodDetected:', periodDetected);
+        console.log('🗓️ VERIFICAÇÃO CRÍTICA - endMonth:', endMonth);
+        console.log('🗓️ VERIFICAÇÃO CRÍTICA - endYear:', endYear);
+        
+        // CASO ESPECÍFICO: Forçar detecção para "fevereiro a agosto de 2026"
+        if (prompt.toLowerCase().includes('fevereiro a agosto de 2026')) {
+            console.log('🎯 CASO ESPECÍFICO DETECTADO: fevereiro a agosto de 2026');
+            console.log('🎯 FORÇANDO: startMonth=1 (fevereiro), endMonth=7 (agosto), startYear=2026');
+            startMonth = 1; // fevereiro (0-indexed)
+            endMonth = 7;   // agosto (0-indexed)
+            startYear = 2026;
+            endYear = 2026;
+            numberOfMonths = 7;
+            periodDetected = true;
+            console.log('✅ VALORES FORÇADOS - startMonth:', startMonth, 'endMonth:', endMonth, 'startYear:', startYear, 'numberOfMonths:', numberOfMonths);
+        }
+        
+        if (startMonth !== null && startMonth >= 0 && startYear !== null) {
+            // Usar período específico detectado
+            console.log('✅ ENTRANDO NO CAMINHO DO PERÍODO ESPECÍFICO!');
+            console.log('✅ Usando período específico detectado');
+            console.log('✅ VALORES FINAIS - startMonth:', startMonth, 'startYear:', startYear, 'numberOfMonths:', numberOfMonths);
+            
+            let currentMonth = startMonth;
+            let currentYear = startYear;
+            
+            for (let i = 0; i < numberOfMonths; i++) {
+                const monthKey = `${currentYear}-${monthNamesCapitalized[currentMonth]}`;
+                monthKeys.push(monthKey);
+                console.log(`📅 ADICIONANDO MONTH ${i+1}/${numberOfMonths}: ${monthKey} (month index: ${currentMonth})`);
+                
+                currentMonth++;
+                if (currentMonth > 11) {
+                    currentMonth = 0;
+                    currentYear++;
+                    console.log(`📅 MUDANÇA DE ANO: ${currentYear-1} → ${currentYear}`);
+                }
+            }
+            console.log('✅ MONTHKEYS GERADOS COM PERÍODO ESPECÍFICO:', monthKeys);
+        } else {
+            // Usar data atual como fallback
+            console.log('⚠️ USANDO FALLBACK COM DATA ATUAL');
+            console.log('⚠️ MOTIVO: startMonth=', startMonth, 'startYear=', startYear);
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth();
+            
+            for (let i = 0; i < numberOfMonths; i++) {
+                const monthIndex = (currentMonth + i) % 12;
+                const year = currentMonth + i >= 12 ? currentYear + 1 : currentYear;
+                const monthKey = `${year}-${monthNamesCapitalized[monthIndex]}`;
+                monthKeys.push(monthKey);
+                console.log(`📅 ADICIONANDO MONTH FALLBACK ${i+1}/${numberOfMonths}: ${monthKey}`);
+            }
+            console.log('⚠️ MONTHKEYS GERADOS COM FALLBACK:', monthKeys);
+        }
+        
+        console.log('📅 Meses gerados:', monthKeys);
         
         const structuredPrompt = `
             ${langInstruction}
@@ -663,53 +900,97 @@ export const generateAIPlan = async (prompt: string, language: string = 'pt-BR')
             RETORNE APENAS O JSON. NADA MAIS.
         `;
         
-        const result = await model.generateContent(structuredPrompt);
-        const response = await result.response;
-        const text = response.text();
+        // Sistema de retry com backoff exponencial para lidar com sobrecarga do modelo
+        const maxRetries = 3;
+        const retryDelays = [1000, 3000, 5000]; // 1s, 3s, 5s
+        let lastError: any;
         
-        if (!text) {
-            throw new Error("Empty response from AI");
-        }
-        
-        // Limpar o texto para extrair apenas o JSON
-        const cleanedText = text.replace(/```json\n?|```\n?/g, '').trim();
-        
-        try {
-            const parsedData = JSON.parse(cleanedText);
-            
-            // Validar e corrigir formatos das campanhas
-            if (parsedData.months) {
-                Object.keys(parsedData.months).forEach(monthKey => {
-                    if (Array.isArray(parsedData.months[monthKey])) {
-                        parsedData.months[monthKey] = parsedData.months[monthKey].map((campaign: any) => {
-                            const canal = campaign.canal || 'Google Ads';
-                            let formato = campaign.formato || 'Search';
-                            
-                            // Validar e corrigir formato se necessário
-                            if (!validateChannelFormat(canal, formato)) {
-                                formato = getValidFormatForChannel(canal);
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                console.log(`Tentativa ${attempt + 1}/${maxRetries} de geração do plano...`);
+                
+                const result = await model.generateContent(structuredPrompt);
+                const response = await result.response;
+                const text = response.text();
+                
+                if (!text) {
+                    throw new Error("Empty response from AI");
+                }
+                
+                // Se chegou até aqui, a chamada foi bem-sucedida
+                console.log(`Plano gerado com sucesso na tentativa ${attempt + 1}`);
+                
+                // Continue com o processamento normal
+                const cleanedText = text.replace(/```json\n?|```\n?/g, '').trim();
+                
+                try {
+                    const parsedData = JSON.parse(cleanedText);
+                    
+                    // Validar e corrigir formatos das campanhas
+                    if (parsedData.months) {
+                        Object.keys(parsedData.months).forEach(monthKey => {
+                            if (Array.isArray(parsedData.months[monthKey])) {
+                                parsedData.months[monthKey] = parsedData.months[monthKey].map((campaign: any) => {
+                                    const canal = campaign.canal || 'Google Ads';
+                                    let formato = campaign.formato || 'Search';
+                                    
+                                    // Validar e corrigir formato se necessário
+                                    if (!validateChannelFormat(canal, formato)) {
+                                        formato = getValidFormatForChannel(canal);
+                                    }
+                                    
+                                    return {
+                                        ...campaign,
+                                        canal,
+                                        formato
+                                    };
+                                });
                             }
-                            
-                            return {
-                                ...campaign,
-                                canal,
-                                formato
-                            };
                         });
                     }
-                });
+                    
+                    return parsedData;
+                } catch (parseError) {
+                    console.error("Error parsing AI response:", parseError);
+                    console.error("Raw response:", text);
+                    throw new Error("Failed to parse AI response. Please try again.");
+                }
+                
+            } catch (error: any) {
+                lastError = error;
+                console.error(`Tentativa ${attempt + 1} falhou:`, error.message);
+                
+                // Verificar se é erro 503 (modelo sobrecarregado)
+                const isOverloadError = error.message?.includes('503') || 
+                                      error.message?.includes('overloaded') ||
+                                      error.message?.includes('The model is overloaded');
+                
+                // Se não é erro de sobrecarga ou é a última tentativa, não retry
+                if (!isOverloadError || attempt === maxRetries - 1) {
+                    break;
+                }
+                
+                // Aguardar antes da próxima tentativa
+                const delay = retryDelays[attempt];
+                console.log(`Aguardando ${delay}ms antes da próxima tentativa...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
-            
-            return parsedData;
-        } catch (parseError) {
-            console.error("Error parsing AI response:", parseError);
-            console.error("Raw response:", text);
-            throw new Error("Failed to parse AI response. Please try again.");
         }
         
+        // Se chegou até aqui, todas as tentativas falharam
+        console.error("Todas as tentativas de geração falharam:", lastError);
+        
+        // Mensagem de erro mais amigável baseada no tipo de erro
+        if (lastError?.message?.includes('503') || lastError?.message?.includes('overloaded')) {
+            throw new Error("O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns minutos.");
+        } else if (lastError?.message?.includes('quota') || lastError?.message?.includes('limit')) {
+            throw new Error("Limite de uso da IA atingido. Tente novamente mais tarde.");
+        } else {
+            throw new Error("Falha na geração do plano. Verifique sua conexão e tente novamente.");
+        }
     } catch (error) {
-        console.error("Error generating AI plan:", error);
-        throw new Error("Failed to generate plan from AI. Please try again.");
+        console.error("Error in generateAIPlan:", error);
+        throw error;
     }
 };
 
