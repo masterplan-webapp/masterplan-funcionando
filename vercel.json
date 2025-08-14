@@ -4,5 +4,8 @@
       "source": "/((?!api/|assets/).*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "VITE_GOOGLE_AI_API_KEY": "AIzaSyBj2t3M153tC_7bspeTXNh-GLHvEiP6xdQ"
+  }
 }
